@@ -151,7 +151,18 @@ def select_semester(page, semester_label: str) -> bool:
 
     semester_select.locator("button.selectBox").click()
     option.first.click()
-    page.wait_for_timeout(200)
+
+    # 학기를 바꾸면 화면이 내부적으로 과목 목록을 다시 조회하는 것으로 보인다.
+    # 이 백그라운드 요청이 끝나기 전에 검색어를 입력하고 '조회'를 누르면, 학기
+    # 변경으로 트리거된 요청과 우리가 누른 조회 요청이 뒤섞여 검색어가 적용되지
+    # 않은(또는 응답 순서가 꼬인) 결과를 받을 수 있어 완전히 안정될 때까지 기다린다.
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(500)
+
+    total_text = page.locator(".total_area .total")
+    if total_text.count() > 0:
+        print(f"[select_semester] 학기 변경 직후 총 건수 표시: {total_text.first.inner_text().strip()}")
+
     return True
 
 
