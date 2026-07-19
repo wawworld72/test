@@ -17,9 +17,11 @@ campus.ibk.co.kr (i-on캠퍼스, 호서대학교) 주차별 출석부 조회 스
 동작:
     1) https://campus.ibk.co.kr/admin/ 으로 이동, 로그인
     2) 좌측 메뉴(전자출결관리 > 전자출결 > 주차별 출석부 조회)로 이동
-    3) 년도/학기 선택 (지정한 경우) 후, 교과목명으로 검색해 '조회' 클릭
-    4) 검색된 과목 목록(IBSheet 그리드)에서 대상 과목을 클릭해 상세
-       출석부('주차별 출석부 상세')로 이동
+    3) 년도/학기 선택 (지정한 경우) 후 '조회' 클릭해 그 학기의 전체 과목
+       목록을 불러옴 (교과목명으로 다시 검색하지 않음 - 그 경로는 총 0건이
+       나오는 문제가 있었음)
+    4) 불러온 과목 목록(IBSheet 그리드)에서 IBK_COURSE_NAME과 일치하는
+       행을 찾아 클릭해 상세 출석부('주차별 출석부 상세')로 이동
     5) 상세 출석부는 일반 <table>이라 attendance_lib의 colspan/rowspan
        파서를 그대로 재사용해 학번/이름/주차/교시/출결상태 long-format
        CSV로 저장 (읽기 전용, 다른 액션은 수행하지 않음)
@@ -166,12 +168,13 @@ def select_semester(page, semester_label: str) -> bool:
     return True
 
 
-def search_course(page, course_name: str) -> None:
-    """'구분'을 교과목명으로 두고 검색어를 입력한 뒤 '조회' 클릭"""
-    search_input = page.locator('.sc_table input[placeholder="내용을 넣어주세요"]')
-    search_input.fill(course_name)
-    print(f"[search_course] 검색창 입력값: {search_input.input_value()!r}")
+def load_course_list(page) -> None:
+    """선택된 학기의 교과목 목록을 불러온다.
 
+    화면은 학기만으로 조회하면 그 학기에 개설된 과목이 모두 나열되고,
+    이후 그 목록에서 원하는 과목을 클릭해 들어가는 방식이다. 교과목명으로
+    다시 검색할 필요가 없다(오히려 그 경로에서 총 0건이 나오는 문제가 있었다).
+    """
     page.locator("button.conm", has_text="조회").click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
@@ -179,11 +182,11 @@ def search_course(page, course_name: str) -> None:
     try:
         page.locator(".IBDataRow").first.wait_for(state="visible", timeout=8000)
     except PlaywrightTimeoutError:
-        pass  # 검색 결과가 없을 수도 있음 - 아래에서 total_area로 확인
+        pass  # 결과가 없을 수도 있음 - 아래에서 total_area로 확인
 
     total_text = page.locator(".total_area .total")
     if total_text.count() > 0:
-        print(f"[search_course] 총 건수 표시: {total_text.first.inner_text().strip()}")
+        print(f"[load_course_list] 총 건수 표시: {total_text.first.inner_text().strip()}")
 
     semester_select = page.locator(".sc_table .n_select").nth(0)
     if semester_select.count() > 0:
@@ -242,31 +245,6 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
     return page.locator("table.line_table").count() > 0
 
 
-def log_traffic(page) -> None:
-    """실제 서버로 나가는 검색 요청/응답을 확인하기 위한 네트워크 로깅.
-
-    '조회'를 눌러도 화면에는 아무 오류 없이 총 0건만 나오는 상황이라, UI
-    조작이 맞게 됐는지가 아니라 서버로 어떤 파라미터가 실제로 전달됐는지를
-    봐야 원인을 알 수 있다.
-    """
-
-    def on_request(request):
-        if request.resource_type in ("xhr", "fetch"):
-            print(f"[net>] {request.method} {request.url} postData={request.post_data!r}")
-
-    def on_response(response):
-        request = response.request
-        if request.resource_type in ("xhr", "fetch"):
-            try:
-                body = response.text()[:500]
-            except Exception as exc:
-                body = f"<본문 읽기 실패: {exc}>"
-            print(f"[net<] {response.status} {response.url} body={body!r}")
-
-    page.on("request", on_request)
-    page.on("response", on_response)
-
-
 def main():
     if not COURSE_NAME:
         print("IBK_COURSE_NAME 환경변수가 설정되지 않았습니다.", file=sys.stderr)
@@ -275,7 +253,6 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        log_traffic(page)
 
         page.goto(TARGET_URL)
         page.wait_for_load_state("networkidle")
@@ -302,7 +279,7 @@ def main():
         if SEMESTER:
             select_semester(page, SEMESTER)
 
-        search_course(page, COURSE_NAME)
+        load_course_list(page)
 
         if not open_course_detail(page, COURSE_NAME, SECTION):
             OUTPUT_DIR.mkdir(exist_ok=True)
