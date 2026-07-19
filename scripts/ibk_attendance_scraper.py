@@ -356,6 +356,27 @@ def main():
                     f"찾은 표에 주차 데이터가 없습니다 (학생 수: {result['student_count']}). "
                     f"디버깅용 페이지를 '{debug_path}'에 저장했습니다."
                 )
+
+            # 아티팩트(디버깅용 페이지)를 워크플로 밖에서 내려받기 어려운
+            # 환경도 있어, 어떤 table.line_table 요소들이 실제로 매치됐는지
+            # 로그에 바로 남겨서 아티팩트 없이도 원인을 확인할 수 있게 한다.
+            line_tables = page.locator("table.line_table")
+            print(f"[디버그] table.line_table count={line_tables.count()}, 전체 table count={page.locator('table').count()}")
+            for i in range(line_tables.count()):
+                t = line_tables.nth(i)
+                try:
+                    visible = t.is_visible()
+                    tr_count = t.locator("tr").count()
+                    tbody_tr_count = t.locator("tbody tr").count()
+                    outer = t.evaluate("el => el.outerHTML.slice(0, 500)")
+                except Exception as exc:  # noqa: BLE001 - 디버그 출력이 실패해도 계속 진행
+                    print(f"[디버그] table.line_table[{i}] 평가 중 오류: {exc}")
+                    continue
+                print(
+                    f"[디버그] table.line_table[{i}] visible={visible}, tr={tr_count}, "
+                    f"tbody_tr={tbody_tr_count}, outerHTML(500자)={outer!r}"
+                )
+
             browser.close()
             sys.exit(1)
 
