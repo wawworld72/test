@@ -121,15 +121,25 @@ def select_semester(page, semester_label: str) -> bool:
         print("년도/학기 선택 영역을 찾지 못했습니다.")
         return False
 
-    # 화면 전환 직후에는 드롭다운 옵션이 아직 채워지기 전일 수 있어 잠깐 대기
-    try:
-        semester_select.locator("li").first.wait_for(state="attached", timeout=5000)
-    except PlaywrightTimeoutError:
-        pass
+    # 화면 전환 직후에는 "선택해주세요" 플레이스홀더 <li> 하나만 DOM에 있고,
+    # 실제 연도/학기 옵션은 비동기로 나중에 채워진다. 플레이스홀더는 data-value가
+    # 없으므로, li가 "존재"하는지가 아니라 data-value를 가진 실제 옵션이
+    # 나타날 때까지 폴링해야 한다 (그렇지 않으면 옵션 목록이 비어있는 상태를
+    # '학기를 찾지 못함'으로 오판하게 된다).
+    options = semester_select.locator("li[data-value]")
+    populated = False
+    for _ in range(20):
+        if options.count() > 0:
+            populated = True
+            break
+        page.wait_for_timeout(300)
 
-    options = semester_select.locator("li")
     labels = [options.nth(i).get_attribute("data-label") for i in range(options.count())]
-    print(f"[select_semester] 현재 선택값: {semester_select.locator('button.selectBox').inner_text().strip()!r}, 옵션 목록: {labels}")
+    print(
+        f"[select_semester] populated={populated}, "
+        f"현재 선택값: {semester_select.locator('button.selectBox').inner_text().strip()!r}, "
+        f"옵션 목록: {labels}"
+    )
 
     option = semester_select.locator(f'li[data-label="{semester_label}"]')
     if option.count() == 0:
