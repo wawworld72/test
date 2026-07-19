@@ -103,6 +103,22 @@ def navigate_to_attendance_list(page) -> bool:
     target_btn.first.click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(800)
+
+    # 검색 영역의 '조회' 버튼을 눌러야 결과 그리드가 채워지는 화면일 수 있음
+    search_btn = page.locator("button.conm", has_text="조회")
+    if search_btn.count() > 0 and search_btn.first.is_visible():
+        search_btn.first.click()
+        page.wait_for_load_state("networkidle")
+
+    try:
+        page.locator(".IBDataRow").first.wait_for(state="visible", timeout=8000)
+    except PlaywrightTimeoutError:
+        pass  # 아래에서 total_area 텍스트 등으로 상태 확인
+
+    total_area = page.locator(".total_area")
+    if total_area.count() > 0:
+        print(f"[navigate] 총 건수 표시: {total_area.first.inner_text().strip()}")
+
     return True
 
 
@@ -183,6 +199,10 @@ def main():
             debug_path = OUTPUT_DIR / "page_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
             print(f"과목 목록을 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            print(f"[debug] title={page.title()!r}, url={page.url}")
+            print("=== PAGE_TEXT_PREVIEW ===")
+            print(page.inner_text("body")[:2000])
+            print("=== END PAGE_TEXT_PREVIEW ===")
 
         browser.close()
 
