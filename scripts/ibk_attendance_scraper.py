@@ -319,6 +319,16 @@ def main():
         try:
             with page.expect_download(timeout=15000) as download_info:
                 excel_button.click()
+                # 클릭 직후 "엑셀 다운로드 하시겠습니까?" 커스텀(HTML) 확인
+                # 모달이 뜬다. 네이티브 다이얼로그가 아니라서 page.on("dialog")로는
+                # 잡히지 않으므로, 뜨면 '확인' 버튼을 직접 눌러줘야 실제
+                # 다운로드가 시작된다.
+                confirm_button = page.locator("div.modal.alert button.confirm")
+                try:
+                    confirm_button.wait_for(state="visible", timeout=5000)
+                    confirm_button.click()
+                except PlaywrightTimeoutError:
+                    pass  # 모달 없이 바로 다운로드되는 경우도 있을 수 있음
             download_info.value.save_as(str(xls_path))
             print(f"엑셀 다운로드 저장됨: {xls_path}")
         except PlaywrightTimeoutError:
