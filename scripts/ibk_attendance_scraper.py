@@ -268,6 +268,22 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
         except PlaywrightTimeoutError:
             pass
 
+    if not line_table_visible():
+        return False
+
+    # 표 골격(헤더)이 보이기 시작해도 학생 데이터(tbody 행)는 뒤이어 AJAX로
+    # 채워지는 것으로 보인다 - 실제로 헤더만 뜬 채 tbody가 아직 빈 상태(또는
+    # 자리표시 행 1개)에서 바로 파싱해 학생 수 1명/주차 수 0으로 나온 적이
+    # 있다. tbody 행 수가 두 번 연속 같은 값으로 안정될 때까지 짧게 폴링한다.
+    page.wait_for_load_state("networkidle")
+    prev_rows = -1
+    for _ in range(15):
+        rows = page.locator("table.line_table tbody tr").count()
+        if rows > 0 and rows == prev_rows:
+            break
+        prev_rows = rows
+        page.wait_for_timeout(300)
+
     return line_table_visible()
 
 

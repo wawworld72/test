@@ -121,10 +121,16 @@ def select_show_all(page, original_url: str) -> bool:
 def get_main_table(page, prefer_selector=None):
     """페이지에서 출석 표로 보이는 테이블을 찾는다.
 
-    prefer_selector가 주어지고 그 셀렉터에 해당하는 '보이는' 테이블이
-    있으면 그것을 바로 사용한다 (예: campus.ibk.co.kr의 'table.line_table'
-    처럼 정확한 클래스명을 이미 알고 있는 경우). 그렇지 않으면 행 수가
-    가장 많은 '보이는' 테이블로 추정한다.
+    prefer_selector가 주어지면 그 셀렉터에 해당하는 '보이는' 테이블들 중
+    행 수가 가장 많은 것을 사용한다 (예: campus.ibk.co.kr의
+    'table.line_table'처럼 정확한 클래스명을 이미 알고 있는 경우). 그렇지
+    않으면 전체 <table> 중 행 수가 가장 많은 '보이는' 테이블로 추정한다.
+
+    prefer_selector가 있어도 첫 번째로 보이는 요소를 곧바로 쓰지 않고 행
+    수를 비교하는 이유: 같은 클래스명이 요약/합계용 소형 위젯 등 다른
+    용도의 테이블에도 재사용될 수 있어(실제로 학생 1명짜리 요약 테이블이
+    먼저 잡혀 진짜 출석표 대신 반환된 적이 있음), 행 수 비교 없이는 그런
+    작은 테이블을 진짜 데이터 표로 오인할 수 있다.
 
     행 수만으로 추정하는 방식은 애매할 수 있다 - SPA 화면(예:
     campus.ibk.co.kr)은 이전에 방문한 화면의 테이블을 display:none 상태로
@@ -134,9 +140,17 @@ def get_main_table(page, prefer_selector=None):
     """
     if prefer_selector:
         preferred = page.locator(prefer_selector)
+        best_idx, best_rows = None, -1
         for i in range(preferred.count()):
-            if preferred.nth(i).is_visible():
-                return preferred.nth(i)
+            candidate = preferred.nth(i)
+            if not candidate.is_visible():
+                continue
+            rows = candidate.locator("tr").count()
+            if rows > best_rows:
+                best_rows = rows
+                best_idx = i
+        if best_idx is not None:
+            return preferred.nth(best_idx)
 
     tables = page.locator("table")
     count = tables.count()
