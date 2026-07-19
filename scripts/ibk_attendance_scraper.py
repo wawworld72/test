@@ -239,25 +239,36 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
     link_cell = target_row.locator('td[class*="HideCol"][class*="stdNm"]').first
     link_cell.click()
 
+    def line_table_visible() -> bool:
+        table = page.locator("table.line_table")
+        return table.count() > 0 and table.first.is_visible()
+
     # 단일 클릭만으로 상세화면으로 이동하는 경우가 있는데, 전환에 500ms보다
-    # 오래 걸릴 때도 있어 고정 대기 대신 짧게 폴링한다.
-    for _ in range(10):
-        if page.locator("table.line_table").count() > 0:
+    # 오래 걸릴 때도 있어 고정 대기 대신 짧게 폴링한다. count()>0만으로는
+    # 부족하다 - 테이블이 DOM에 붙은 직후에도 display:none -> block 전환이
+    # 끝나기 전이라 is_visible()이 아직 false일 수 있고, 이 상태로 바로
+    # 리턴하면 parse_report_table의 prefer_selector가 '보이는 테이블 없음'으로
+    # 판단해 엉뚱한 테이블로 폴백해버린다.
+    for _ in range(15):
+        if line_table_visible():
             break
         page.wait_for_timeout(300)
 
-    if page.locator("table.line_table").count() == 0:
+    if not line_table_visible():
         # 단일 클릭으로 이동하지 않았다면 더블클릭을 시도한다. 다만 첫 클릭이
         # 이미 화면 전환을 시작해 이 행이 사라지는 중일 수 있어, dblclick이
         # 기본 30초 타임아웃으로 스크립트 전체를 죽이지 않도록 짧게 감싼다.
         try:
             link_cell.dblclick(timeout=5000)
             page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(500)
+            for _ in range(15):
+                if line_table_visible():
+                    break
+                page.wait_for_timeout(300)
         except PlaywrightTimeoutError:
             pass
 
-    return page.locator("table.line_table").count() > 0
+    return line_table_visible()
 
 
 def main():

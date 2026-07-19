@@ -202,18 +202,43 @@ def build_columns(grid, is_header_row):
 
 
 def build_long_rows(grid, columns, data_rows):
-    """학번/이름 등 메타데이터 + 주차 + 항목순번 + 출결상태로 이루어진 tidy/long 포맷 생성"""
-    meta_labels = [c["label"] for c in columns if c["kind"] == "meta"]
+    """학번/이름 등 메타데이터 + 주차 + 항목순번 + 출결상태로 이루어진 tidy/long 포맷 생성
+
+    메타 열 중 데이터 행 전체에서 값이 다른 메타 열과 완전히 똑같이 반복되는
+    열은 실제 데이터가 아니라 병합 셀(colspan) 때문에 옆 열의 값이 그대로
+    흘러들어온 유령 열로 보고 제외한다 (예: IBK 사이트에서 '이름' 셀이
+    colspan="2"라서 헤더상 '시간'으로 보이는 다음 열에도 이름이 그대로
+    중복되는 경우 - 실제 주차 데이터 열 정렬에는 영향 없음, 메타 열에만
+    해당).
+    """
+    meta_indices = [c_idx for c_idx, col in enumerate(columns) if col["kind"] == "meta"]
+
+    col_values = {}
+    for c_idx in meta_indices:
+        values = []
+        for r in data_rows:
+            row = grid[r] if r < len(grid) else []
+            cell = row[c_idx] if c_idx < len(row) else None
+            values.append(cell["text"] if cell else "")
+        col_values[c_idx] = values
+
+    seen_values = []
+    kept_indices = []
+    for c_idx in meta_indices:
+        values = col_values[c_idx]
+        if values in seen_values:
+            continue
+        seen_values.append(values)
+        kept_indices.append(c_idx)
+
+    meta_labels = [columns[c_idx]["label"] for c_idx in kept_indices]
     long_rows = []
 
-    for r in data_rows:
+    for row_pos, r in enumerate(data_rows):
         row = grid[r] if r < len(grid) else []
         meta = {}
-        for c_idx, col in enumerate(columns):
-            if col["kind"] != "meta":
-                continue
-            cell = row[c_idx] if c_idx < len(row) else None
-            meta[col["label"]] = cell["text"] if cell else ""
+        for c_idx in kept_indices:
+            meta[columns[c_idx]["label"]] = col_values[c_idx][row_pos]
 
         if not any(v.strip() for v in meta.values()):
             continue
