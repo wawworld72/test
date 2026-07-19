@@ -121,6 +121,16 @@ def select_semester(page, semester_label: str) -> bool:
         print("년도/학기 선택 영역을 찾지 못했습니다.")
         return False
 
+    # 화면 전환 직후에는 드롭다운 옵션이 아직 채워지기 전일 수 있어 잠깐 대기
+    try:
+        semester_select.locator("li").first.wait_for(state="attached", timeout=5000)
+    except PlaywrightTimeoutError:
+        pass
+
+    options = semester_select.locator("li")
+    labels = [options.nth(i).get_attribute("data-label") for i in range(options.count())]
+    print(f"[select_semester] 현재 선택값: {semester_select.locator('button.selectBox').inner_text().strip()!r}, 옵션 목록: {labels}")
+
     option = semester_select.locator(f'li[data-label="{semester_label}"]')
     if option.count() == 0:
         print(f"학기 목록에서 '{semester_label}'를 찾지 못했습니다.")
@@ -137,18 +147,26 @@ def select_semester(page, semester_label: str) -> bool:
 
 def search_course(page, course_name: str) -> None:
     """'구분'을 교과목명으로 두고 검색어를 입력한 뒤 '조회' 클릭"""
-    page.locator('.sc_table input[placeholder="내용을 넣어주세요"]').fill(course_name)
+    search_input = page.locator('.sc_table input[placeholder="내용을 넣어주세요"]')
+    search_input.fill(course_name)
+    print(f"[search_course] 검색창 입력값: {search_input.input_value()!r}")
+
     page.locator("button.conm", has_text="조회").click()
     page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(500)
 
     try:
         page.locator(".IBDataRow").first.wait_for(state="visible", timeout=8000)
     except PlaywrightTimeoutError:
         pass  # 검색 결과가 없을 수도 있음 - 아래에서 total_area로 확인
 
-    total_area = page.locator(".total_area")
-    if total_area.count() > 0:
-        print(f"[search_course] 총 건수 표시: {total_area.first.inner_text().strip()}")
+    total_text = page.locator(".total_area .total")
+    if total_text.count() > 0:
+        print(f"[search_course] 총 건수 표시: {total_text.first.inner_text().strip()}")
+
+    semester_select = page.locator(".sc_table .n_select").nth(0)
+    if semester_select.count() > 0:
+        print(f"[search_course] 적용된 학기: {semester_select.locator('button.selectBox').inner_text().strip()!r}")
 
 
 def open_course_detail(page, course_name: str, section: str | None) -> bool:
