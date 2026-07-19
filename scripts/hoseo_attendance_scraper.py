@@ -104,7 +104,7 @@ def main():
         lib.write_long_csv(long_rows, meta_labels, long_path)
         print(f"저장됨: {long_path} ({len(long_rows)}행, long format)")
 
-        fieldnames = meta_labels + ["주차", "항목순번", "항목라벨", "출결상태"]
+        fieldnames = meta_labels + ["주차", "항목순번", "출결상태"]
         print(f"\n=== ATTENDANCE_LONG ({len(long_rows)} rows) ===")
         print(",".join(fieldnames))
         for row in long_rows:

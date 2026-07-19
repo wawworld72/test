@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 WEEK_RE = re.compile(r"(\d+)\s*주차")
+SORT_LINK_RE = re.compile(r"\s*정렬\s+\S+\s+(오름차순|내림차순)\s*")
 
 SHOW_ALL_LABELS = ("모두", "전체", "All", "전체보기", "전체 보기")
 
@@ -103,8 +104,15 @@ def select_show_all(page, original_url: str) -> bool:
         page.wait_for_load_state("networkidle")
         applied = False
 
-    after_table = get_main_table(page)
-    after_rows = after_table.locator("tr").count() if after_table else 0
+    # 표가 AJAX로 다시 그려지는 경우 즉시 조회하면 행 수가 일시적으로 0으로 보일 수 있어 짧게 재확인한다
+    after_rows = 0
+    for _ in range(5):
+        after_table = get_main_table(page)
+        after_rows = after_table.locator("tr").count() if after_table else 0
+        if after_rows >= before_rows:
+            break
+        page.wait_for_timeout(300)
+
     print(f"[select_show_all] rows before={before_rows}, after={after_rows}, applied={applied}, url={page.url}")
 
     return applied and after_rows >= before_rows
@@ -154,16 +162,10 @@ def build_columns(grid, is_header_row):
 
         if week_num is not None:
             week_item_counters[week_num] = week_item_counters.get(week_num, 0) + 1
-            sub_label = ""
-            for text in reversed(header_texts):
-                if text and not WEEK_RE.search(text):
-                    sub_label = text
-                    break
             columns.append({
                 "kind": "week",
                 "week": week_num,
                 "item_index": week_item_counters[week_num],
-                "sub_label": sub_label,
             })
         else:
             label = ""
@@ -171,6 +173,7 @@ def build_columns(grid, is_header_row):
                 if text:
                     label = text
                     break
+            label = SORT_LINK_RE.sub("", label).strip()
             columns.append({"kind": "meta", "label": label or f"col_{c}"})
 
     return columns, data_rows
@@ -200,7 +203,6 @@ def build_long_rows(grid, columns, data_rows):
             entry = dict(meta)
             entry["주차"] = col["week"]
             entry["항목순번"] = col["item_index"]
-            entry["항목라벨"] = col["sub_label"]
             entry["출결상태"] = cell["text"] if cell else ""
             long_rows.append(entry)
 
@@ -231,7 +233,7 @@ def parse_report_table(page):
 
 
 def write_long_csv(long_rows, meta_labels, out_path: Path) -> None:
-    fieldnames = meta_labels + ["주차", "항목순번", "항목라벨", "출결상태"]
+    fieldnames = meta_labels + ["주차", "항목순번", "출결상태"]
     with out_path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
