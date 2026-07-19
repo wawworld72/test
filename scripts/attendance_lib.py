@@ -119,11 +119,21 @@ def select_show_all(page, original_url: str) -> bool:
 
 
 def get_main_table(page):
+    """페이지에서 가장 행이 많은 '보이는' 테이블을 찾는다.
+
+    SPA 화면(예: campus.ibk.co.kr)은 이전에 방문한 화면의 테이블을
+    display:none 상태로 DOM에 남겨두는 경우가 있다. 숨겨진 테이블까지
+    포함해 행 수만으로 비교하면, 실제로 보고 있는 출석표 대신 이전
+    화면의 더 큰(숨겨진) 그리드를 잘못 고를 수 있어 보이는 테이블만 대상으로 한다.
+    """
     tables = page.locator("table")
     count = tables.count()
     best_idx, best_rows = None, -1
     for i in range(count):
-        rows = tables.nth(i).locator("tr").count()
+        table = tables.nth(i)
+        if not table.is_visible():
+            continue
+        rows = table.locator("tr").count()
         if rows > best_rows:
             best_rows = rows
             best_idx = i
