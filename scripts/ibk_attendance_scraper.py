@@ -340,11 +340,22 @@ def main():
         # 행이 많은 다른 보이는 테이블이 있어 여전히 잘못 고를 수 있었기에,
         # 이 화면의 출석표 클래스명을 정확히 지정해 확실하게 집어낸다.
         result = lib.parse_report_table(page, prefer_selector="table.line_table")
-        if result is None:
+        # 찾은 표는 있지만 주차 수가 0이면 잘못된(엉뚱한) 표를 집은 것이 거의
+        # 확실하다 - 진짜 출석부라면 최소 1주차는 있어야 한다. 이런 경우도
+        # None일 때와 마찬가지로 디버깅용 페이지를 저장해서 다음에 실제로 어떤
+        # DOM 상태였는지 확인할 수 있게 한다 (이전에는 result가 None이 아니면
+        # 저장하지 않아서 잘못된 결과가 나올 때마다 원인을 추측만 해야 했다).
+        if result is None or not result["weeks"]:
             OUTPUT_DIR.mkdir(exist_ok=True)
             debug_path = OUTPUT_DIR / "detail_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
-            print(f"출석 표를 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            if result is None:
+                print(f"출석 표를 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            else:
+                print(
+                    f"찾은 표에 주차 데이터가 없습니다 (학생 수: {result['student_count']}). "
+                    f"디버깅용 페이지를 '{debug_path}'에 저장했습니다."
+                )
             browser.close()
             sys.exit(1)
 
