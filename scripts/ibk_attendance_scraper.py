@@ -22,9 +22,12 @@ campus.ibk.co.kr (i-on캠퍼스, 호서대학교) 주차별 출석부 조회 스
        나오는 문제가 있었음)
     4) 불러온 과목 목록(IBSheet 그리드)에서 IBK_COURSE_NAME과 일치하는
        행을 찾아 클릭해 상세 출석부('주차별 출석부 상세')로 이동
-    5) 상세 출석부는 일반 <table>이라 attendance_lib의 colspan/rowspan
-       파서를 그대로 재사용해 학번/이름/주차/교시/출결상태 long-format
-       CSV로 저장 (읽기 전용, 다른 액션은 수행하지 않음)
+    5) 상세 화면의 '엑셀다운' 버튼으로 xls를 내려받아 파싱한다. 렌더링된
+       <table>을 colspan/rowspan까지 감안해 긁는 대신 이 방식을 쓰는 이유는,
+       화면이 SPA라 이전 화면의 테이블이 DOM에 숨겨진 채로 남아있어 엉뚱한
+       테이블을 고르는 문제가 있었기 때문 - xls는 그런 문제에서 자유롭다.
+       학번/이름/주차/항목순번/출결상태 long-format CSV로 저장
+       (읽기 전용, 다른 액션은 수행하지 않음)
 """
 
 import os
@@ -233,14 +236,24 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
 
     link_cell = target_row.locator('td[class*="HideCol"][class*="stdNm"]').first
     link_cell.click()
-    page.wait_for_timeout(500)
 
-    # IBSheet 셀은 단일 클릭으로는 선택만 되고, 실제 상세화면 이동에는
-    # 더블클릭이 필요한 경우가 있어 진입 여부를 확인 후 필요하면 재시도한다
+    # 단일 클릭만으로 상세화면으로 이동하는 경우가 있는데, 전환에 500ms보다
+    # 오래 걸릴 때도 있어 고정 대기 대신 짧게 폴링한다.
+    for _ in range(10):
+        if page.locator("table.line_table").count() > 0:
+            break
+        page.wait_for_timeout(300)
+
     if page.locator("table.line_table").count() == 0:
-        link_cell.dblclick()
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(500)
+        # 단일 클릭으로 이동하지 않았다면 더블클릭을 시도한다. 다만 첫 클릭이
+        # 이미 화면 전환을 시작해 이 행이 사라지는 중일 수 있어, dblclick이
+        # 기본 30초 타임아웃으로 스크립트 전체를 죽이지 않도록 짧게 감싼다.
+        try:
+            link_cell.dblclick(timeout=5000)
+            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(500)
+        except PlaywrightTimeoutError:
+            pass
 
     return page.locator("table.line_table").count() > 0
 
@@ -291,12 +304,23 @@ def main():
 
         print(f"과목 상세 진입 성공 (url={page.url})")
 
-        result = lib.parse_report_table(page)
+        OUTPUT_DIR.mkdir(exist_ok=True)
+        xls_path = OUTPUT_DIR / "ibk_attendance_raw.xls"
+
+        # 렌더링된 <table>을 colspan/rowspan까지 감안해 긁는 대신, 화면의
+        # '엑셀다운' 버튼으로 받은 xls를 그대로 파싱한다. 이 화면은 aria-label이
+        # '엑셀다운로드'로 지정돼 있어(과목 목록 화면의 동일 텍스트 버튼과
+        # 구분됨) 다른 숨겨진 화면의 버튼과 헷갈릴 위험이 없다.
+        with page.expect_download() as download_info:
+            page.get_by_role("button", name="엑셀다운로드").click()
+        download_info.value.save_as(str(xls_path))
+        print(f"엑셀 다운로드 저장됨: {xls_path}")
+
+        result = lib.parse_ibk_excel(xls_path)
         if result is None:
-            OUTPUT_DIR.mkdir(exist_ok=True)
             debug_path = OUTPUT_DIR / "detail_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
-            print(f"출석 표를 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            print(f"다운로드한 엑셀을 파싱하지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
             browser.close()
             sys.exit(1)
 
@@ -306,7 +330,6 @@ def main():
         print(f"학생 수(데이터 행): {result['student_count']}")
         print(f"주차 수: {len(result['weeks'])}, 주차별 항목 수: {result['items_per_week']}")
 
-        OUTPUT_DIR.mkdir(exist_ok=True)
         long_path = OUTPUT_DIR / "attendance_long.csv"
         lib.write_long_csv(long_rows, meta_labels, long_path)
         print(f"저장됨: {long_path} ({len(long_rows)}행, long format)")
