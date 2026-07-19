@@ -29,7 +29,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright xlrd
+          pip install playwright
           playwright install --with-deps chromium
 
       - name: Run scraper

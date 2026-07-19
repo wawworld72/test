@@ -22,12 +22,14 @@ campus.ibk.co.kr (i-on캠퍼스, 호서대학교) 주차별 출석부 조회 스
        나오는 문제가 있었음)
     4) 불러온 과목 목록(IBSheet 그리드)에서 IBK_COURSE_NAME과 일치하는
        행을 찾아 클릭해 상세 출석부('주차별 출석부 상세')로 이동
-    5) 상세 화면의 '엑셀다운' 버튼으로 xls를 내려받아 파싱한다. 렌더링된
-       <table>을 colspan/rowspan까지 감안해 긁는 대신 이 방식을 쓰는 이유는,
-       화면이 SPA라 이전 화면의 테이블이 DOM에 숨겨진 채로 남아있어 엉뚱한
-       테이블을 고르는 문제가 있었기 때문 - xls는 그런 문제에서 자유롭다.
-       학번/이름/주차/항목순번/출결상태 long-format CSV로 저장
-       (읽기 전용, 다른 액션은 수행하지 않음)
+    5) 상세 화면의 <table>을 attendance_lib의 colspan/rowspan 파서로 읽어
+       학번/이름/주차/항목순번/출결상태 long-format CSV로 저장 (읽기 전용,
+       다른 액션은 수행하지 않음)
+
+    참고: '엑셀다운' 버튼으로 xls를 받아 파싱하는 방식도 시도했으나, 클릭
+    자체는 되어도 사이트 쪽에서 다운로드를 취소시켰다(은행 계열 시스템
+    특성상 대량 내보내기에 자동화 탐지가 걸려있을 가능성). 이를 우회하려는
+    시도는 하지 않고 화면 스크래핑으로 되돌렸다.
 """
 
 import os
@@ -266,9 +268,6 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        # 엑셀 다운로드 전에 "개인정보 포함 파일입니다" 류의 네이티브 확인
-        # 대화상자가 뜰 수 있어, 뜨면 자동으로 수락한다.
-        page.on("dialog", lambda dialog: dialog.accept())
 
         page.goto(TARGET_URL)
         page.wait_for_load_state("networkidle")
@@ -307,45 +306,18 @@ def main():
 
         print(f"과목 상세 진입 성공 (url={page.url})")
 
-        OUTPUT_DIR.mkdir(exist_ok=True)
-        xls_path = OUTPUT_DIR / "ibk_attendance_raw.xls"
-
-        # 렌더링된 <table>을 colspan/rowspan까지 감안해 긁는 대신, 화면의
-        # '엑셀다운' 버튼으로 받은 xls를 그대로 파싱한다. 이 화면은 aria-label이
-        # '엑셀다운로드'로 지정돼 있어(과목 목록 화면의 동일 텍스트 버튼과
-        # 구분됨) 다른 숨겨진 화면의 버튼과 헷갈릴 위험이 없다.
-        excel_button = page.get_by_role("button", name="엑셀다운로드")
-        print(f"[excel] '엑셀다운로드' 버튼 개수: {excel_button.count()}")
-        try:
-            with page.expect_download(timeout=15000) as download_info:
-                excel_button.click()
-                # 클릭 직후 "엑셀 다운로드 하시겠습니까?" 커스텀(HTML) 확인
-                # 모달이 뜬다. 네이티브 다이얼로그가 아니라서 page.on("dialog")로는
-                # 잡히지 않으므로, 뜨면 '확인' 버튼을 직접 눌러줘야 실제
-                # 다운로드가 시작된다.
-                confirm_button = page.locator("div.modal.alert button.confirm")
-                try:
-                    confirm_button.wait_for(state="visible", timeout=5000)
-                    confirm_button.click()
-                except PlaywrightTimeoutError:
-                    pass  # 모달 없이 바로 다운로드되는 경우도 있을 수 있음
-            download_info.value.save_as(str(xls_path))
-            print(f"엑셀 다운로드 저장됨: {xls_path}")
-        except PlaywrightTimeoutError:
-            debug_path = OUTPUT_DIR / "excel_click_debug.html"
-            debug_path.write_text(page.content(), encoding="utf-8")
-            print(
-                "다운로드 이벤트가 발생하지 않아 클릭 직후 페이지를 "
-                f"'{debug_path}'에 저장했습니다 (url={page.url})."
-            )
-            browser.close()
-            sys.exit(1)
-
-        result = lib.parse_ibk_excel(xls_path)
+        # '엑셀다운' 파일 다운로드는 사이트 측에서 취소시키는 것으로 확인됐다
+        # (은행 계열 시스템 특성상 대량 내보내기에 자동화 탐지가 걸려있을 수
+        # 있음). 우회를 시도하는 대신, 다운로드가 필요 없는 화면 스크래핑으로
+        # 되돌린다. attendance_lib의 colspan/rowspan 파서를 재사용하되,
+        # SPA가 이전 화면의 테이블을 DOM에 숨겨서 남겨두는 문제 때문에
+        # get_main_table()이 "보이는 테이블만" 고르도록 이미 수정해뒀다.
+        result = lib.parse_report_table(page)
         if result is None:
+            OUTPUT_DIR.mkdir(exist_ok=True)
             debug_path = OUTPUT_DIR / "detail_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
-            print(f"다운로드한 엑셀을 파싱하지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            print(f"출석 표를 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
             browser.close()
             sys.exit(1)
 
@@ -355,6 +327,7 @@ def main():
         print(f"학생 수(데이터 행): {result['student_count']}")
         print(f"주차 수: {len(result['weeks'])}, 주차별 항목 수: {result['items_per_week']}")
 
+        OUTPUT_DIR.mkdir(exist_ok=True)
         long_path = OUTPUT_DIR / "attendance_long.csv"
         lib.write_long_csv(long_rows, meta_labels, long_path)
         print(f"저장됨: {long_path} ({len(long_rows)}행, long format)")
