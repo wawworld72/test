@@ -242,6 +242,31 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
     return page.locator("table.line_table").count() > 0
 
 
+def log_traffic(page) -> None:
+    """실제 서버로 나가는 검색 요청/응답을 확인하기 위한 네트워크 로깅.
+
+    '조회'를 눌러도 화면에는 아무 오류 없이 총 0건만 나오는 상황이라, UI
+    조작이 맞게 됐는지가 아니라 서버로 어떤 파라미터가 실제로 전달됐는지를
+    봐야 원인을 알 수 있다.
+    """
+
+    def on_request(request):
+        if request.resource_type in ("xhr", "fetch"):
+            print(f"[net>] {request.method} {request.url} postData={request.post_data!r}")
+
+    def on_response(response):
+        request = response.request
+        if request.resource_type in ("xhr", "fetch"):
+            try:
+                body = response.text()[:500]
+            except Exception as exc:
+                body = f"<본문 읽기 실패: {exc}>"
+            print(f"[net<] {response.status} {response.url} body={body!r}")
+
+    page.on("request", on_request)
+    page.on("response", on_response)
+
+
 def main():
     if not COURSE_NAME:
         print("IBK_COURSE_NAME 환경변수가 설정되지 않았습니다.", file=sys.stderr)
@@ -250,6 +275,7 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
+        log_traffic(page)
 
         page.goto(TARGET_URL)
         page.wait_for_load_state("networkidle")
