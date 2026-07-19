@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 TARGET_URL = "https://campus.ibk.co.kr/admin/"
 USERNAME = os.environ.get("IBK_CAMPUS_USER")
@@ -61,6 +62,15 @@ def try_login(page) -> bool:
     page.locator("#unvrUserId").fill(USERNAME)
     page.locator("#scaPwd").fill(PASSWORD)
     page.locator("button.btn-lg--primary[type=submit]").click()
+
+    # 제출 후 대시보드로 넘어가기 전에 "i-o-n-e-캠-퍼-스" 글자 애니메이션이 있는
+    # 로딩 화면이 뜨는데, 이게 끝나기 전에 확인하면 아직 로그인 폼이 DOM에
+    # 남아있어 실패로 오판할 수 있다. 로그인 폼이 실제로 사라질 때까지 기다린다.
+    try:
+        page.locator("#unvrUserId").wait_for(state="detached", timeout=8000)
+    except PlaywrightTimeoutError:
+        pass  # 폼이 그대로면 아래 networkidle 대기 후 최종 판정
+
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
     return not looks_like_login_page(page)
