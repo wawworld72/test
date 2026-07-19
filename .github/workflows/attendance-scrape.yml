@@ -1,0 +1,39 @@
+name: Hoseo Attendance Scrape
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_url:
+        description: 'Attendance report URL'
+        required: false
+        default: 'https://learn.hoseo.ac.kr/local/ubonattend/report.php?id=40069'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Run scraper
+        env:
+          HOSEO_USERNAME: ${{ secrets.HOSEO_USERNAME }}
+          HOSEO_PASSWORD: ${{ secrets.HOSEO_PASSWORD }}
+          ATTENDANCE_URL: ${{ github.event.inputs.report_url }}
+        run: python scripts/hoseo_attendance_scraper.py
+
+      - name: Upload CSV artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-output
+          path: attendance_output/
+          retention-days: 14
