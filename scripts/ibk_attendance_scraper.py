@@ -1,5 +1,5 @@
 """
-campus.ibk.co.kr (i-on캠퍼스, 호서대학교) 출석 현황 조회 스크래퍼 - GitHub Actions용 headless 버전
+campus.ibk.co.kr (i-on캠퍼스, 호서대학교) 주차별 출석부 조회 스크래퍼 - GitHub Actions용 headless 버전
 
 주의: 은행(IBK) 계열 시스템은 이상거래탐지(FDS)가 걸려있을 수 있어, 낯선
 클라우드 IP에서의 자동 로그인이 보안 경고나 계정 잠금으로 이어질 위험이
@@ -8,20 +8,23 @@ campus.ibk.co.kr (i-on캠퍼스, 호서대학교) 출석 현황 조회 스크래
 
 환경변수:
     IBK_CAMPUS_USER, IBK_CAMPUS_PASS - 로그인 정보 (GitHub Secrets에서 주입)
+    IBK_SEMESTER   - 년도/학기 (예: "2026년도 1학기"). 생략하면 화면에 이미
+                     선택된 학기를 그대로 사용.
+    IBK_COURSE_NAME - 조회할 교과목명 (필수, 부분 일치도 가능)
+    IBK_SECTION     - 분반 (예: "01"). 같은 과목이 여러 분반이면 지정해서
+                      특정 분반을 선택. 생략하면 검색 결과 중 첫 번째 사용.
 
 동작:
-    1) https://campus.ibk.co.kr/admin/ 으로 이동
-    2) 학교선택 드롭다운에서 '호서대학교'(data-value=HOSEO)를 선택 (기본값이
-       'IBK대학교'인 경우가 있어 명시적으로 선택해야 함)
-    3) 아이디/비밀번호 입력 후 로그인
-    4) 좌측 메뉴(전자출결관리 > 전자출결 > 주차별 출석부 조회)로 이동해
-       담당 과목 목록을 조회
-    5) 목록은 IBSheet 그리드 위젯(일반 <table>이 아님)이라, 각 셀의
-       class에 박혀 있는 'HideCol0<필드명>'으로 필드를 식별해 추출.
-       CSV로 저장하고 stdout에도 출력 (읽기 전용, 다른 액션은 수행하지 않음)
+    1) https://campus.ibk.co.kr/admin/ 으로 이동, 로그인
+    2) 좌측 메뉴(전자출결관리 > 전자출결 > 주차별 출석부 조회)로 이동
+    3) 년도/학기 선택 (지정한 경우) 후, 교과목명으로 검색해 '조회' 클릭
+    4) 검색된 과목 목록(IBSheet 그리드)에서 대상 과목을 클릭해 상세
+       출석부('주차별 출석부 상세')로 이동
+    5) 상세 출석부는 일반 <table>이라 attendance_lib의 colspan/rowspan
+       파서를 그대로 재사용해 학번/이름/주차/교시/출결상태 long-format
+       CSV로 저장 (읽기 전용, 다른 액션은 수행하지 않음)
 """
 
-import csv
 import os
 import re
 import sys
@@ -30,11 +33,16 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+import attendance_lib as lib
+
 ATTENDANCE_MENU_TEXT = "주차별 출석부 조회"
 
 TARGET_URL = "https://campus.ibk.co.kr/admin/"
 USERNAME = os.environ.get("IBK_CAMPUS_USER")
 PASSWORD = os.environ.get("IBK_CAMPUS_PASS")
+SEMESTER = os.environ.get("IBK_SEMESTER")
+COURSE_NAME = os.environ.get("IBK_COURSE_NAME")
+SECTION = os.environ.get("IBK_SECTION")
 OUTPUT_DIR = Path(__file__).parent.parent / "ibk_attendance_output"
 
 
@@ -82,8 +90,8 @@ def try_login(page) -> bool:
     return not looks_like_login_page(page)
 
 
-def navigate_to_attendance_list(page) -> bool:
-    """좌측 메뉴(전자출결관리 > 전자출결 > 주차별 출석부 조회)를 통해 과목 목록 화면으로 이동"""
+def navigate_to_course_list(page) -> bool:
+    """좌측 메뉴(전자출결관리 > 전자출결 > 주차별 출석부 조회)를 통해 과목 검색 화면으로 이동"""
     target_btn = page.get_by_text(ATTENDANCE_MENU_TEXT, exact=True)
     if target_btn.count() == 0:
         print(f"메뉴에서 '{ATTENDANCE_MENU_TEXT}'를 찾지 못했습니다.")
@@ -103,69 +111,87 @@ def navigate_to_attendance_list(page) -> bool:
     target_btn.first.click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(800)
+    return True
 
-    # 검색 영역의 '조회' 버튼을 눌러야 결과 그리드가 채워지는 화면일 수 있음
-    search_btn = page.locator("button.conm", has_text="조회")
-    if search_btn.count() > 0 and search_btn.first.is_visible():
-        search_btn.first.click()
-        page.wait_for_load_state("networkidle")
+
+def select_semester(page, semester_label: str) -> bool:
+    """검색 영역의 '년도/학기' 드롭다운에서 지정한 학기를 선택"""
+    semester_select = page.locator(".sc_table .n_select").nth(0)
+    if semester_select.count() == 0:
+        print("년도/학기 선택 영역을 찾지 못했습니다.")
+        return False
+
+    option = semester_select.locator(f'li[data-label="{semester_label}"]')
+    if option.count() == 0:
+        print(f"학기 목록에서 '{semester_label}'를 찾지 못했습니다.")
+        return False
+
+    if "active" in (option.first.get_attribute("class") or ""):
+        return True
+
+    semester_select.locator("button.selectBox").click()
+    option.first.click()
+    page.wait_for_timeout(200)
+    return True
+
+
+def search_course(page, course_name: str) -> None:
+    """'구분'을 교과목명으로 두고 검색어를 입력한 뒤 '조회' 클릭"""
+    page.locator('.sc_table input[placeholder="내용을 넣어주세요"]').fill(course_name)
+    page.locator("button.conm", has_text="조회").click()
+    page.wait_for_load_state("networkidle")
 
     try:
         page.locator(".IBDataRow").first.wait_for(state="visible", timeout=8000)
     except PlaywrightTimeoutError:
-        pass  # 아래에서 total_area 텍스트 등으로 상태 확인
+        pass  # 검색 결과가 없을 수도 있음 - 아래에서 total_area로 확인
 
     total_area = page.locator(".total_area")
     if total_area.count() > 0:
-        print(f"[navigate] 총 건수 표시: {total_area.first.inner_text().strip()}")
-
-    return True
+        print(f"[search_course] 총 건수 표시: {total_area.first.inner_text().strip()}")
 
 
-def extract_ibsheet_rows(page) -> list[dict]:
-    """IBSheet 그리드에서 실제 데이터 행(.IBDataRow)만 추출.
-    각 셀의 class에 'HideCol0<필드명>'이 그대로 박혀 있어 필드명 매핑에 사용."""
-    data_rows = page.locator(".IBDataRow")
-    row_count = data_rows.count()
-    results = []
+def open_course_detail(page, course_name: str, section: str | None) -> bool:
+    """검색된 과목 목록에서 대상 과목을 클릭해 상세 출석부로 이동"""
+    rows = page.locator(".IBDataRow")
+    row_count = rows.count()
+    target_row = None
+
     for i in range(row_count):
-        row = data_rows.nth(i)
-        cells = row.locator('td[class*="HideCol0"]')
-        cell_count = cells.count()
-        row_data = {}
-        for c in range(cell_count):
-            cell = cells.nth(c)
-            cls = cell.get_attribute("class") or ""
-            m = re.search(r"HideCol0(\S+)", cls)
-            field = m.group(1) if m else f"col_{c}"
-            row_data[field] = cell.inner_text().strip()
-        if row_data:
-            results.append(row_data)
-    return results
+        row = rows.nth(i)
+        name_cell = row.locator('td[class*="HideCol"][class*="stdNm"]')
+        if name_cell.count() == 0 or course_name not in name_cell.first.inner_text():
+            continue
+        if section:
+            section_cell = row.locator('td[class*="HideCol"][class*="pruvPrusClgpNm"]')
+            if section_cell.count() == 0 or section_cell.first.inner_text().strip() != section:
+                continue
+        target_row = row
+        break
 
+    if target_row is None:
+        print(f"검색 결과에서 '{course_name}'" + (f" (분반 {section})" if section else "") + "를 찾지 못했습니다.")
+        return False
 
-def dump_ibsheet_rows(rows: list[dict], output_dir: Path, name: str) -> Path | None:
-    if not rows:
-        return None
+    link_cell = target_row.locator('td[class*="HideCol"][class*="stdNm"]').first
+    link_cell.click()
+    page.wait_for_timeout(500)
 
-    output_dir.mkdir(exist_ok=True)
-    fieldnames = list(rows[0].keys())
-    out_path = output_dir / f"{name}.csv"
-    with out_path.open("w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    # IBSheet 셀은 단일 클릭으로는 선택만 되고, 실제 상세화면 이동에는
+    # 더블클릭이 필요한 경우가 있어 진입 여부를 확인 후 필요하면 재시도한다
+    if page.locator("table.line_table").count() == 0:
+        link_cell.dblclick()
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
-    print(f"\n=== {name.upper()} ({len(rows)} rows) ===")
-    print(",".join(fieldnames))
-    for row in rows:
-        print(",".join(str(row.get(k, "")) for k in fieldnames))
-    print(f"=== END {name.upper()} ===")
-
-    return out_path
+    return page.locator("table.line_table").count() > 0
 
 
 def main():
+    if not COURSE_NAME:
+        print("IBK_COURSE_NAME 환경변수가 설정되지 않았습니다.", file=sys.stderr)
+        sys.exit(1)
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
@@ -184,7 +210,7 @@ def main():
 
         print(f"로그인 성공 (url={page.url})")
 
-        if not navigate_to_attendance_list(page):
+        if not navigate_to_course_list(page):
             OUTPUT_DIR.mkdir(exist_ok=True)
             debug_path = OUTPUT_DIR / "nav_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
@@ -192,17 +218,47 @@ def main():
             browser.close()
             sys.exit(1)
 
-        courses = extract_ibsheet_rows(page)
-        saved = dump_ibsheet_rows(courses, OUTPUT_DIR, "course_list")
-        if not saved:
+        if SEMESTER:
+            select_semester(page, SEMESTER)
+
+        search_course(page, COURSE_NAME)
+
+        if not open_course_detail(page, COURSE_NAME, SECTION):
             OUTPUT_DIR.mkdir(exist_ok=True)
-            debug_path = OUTPUT_DIR / "page_debug.html"
+            debug_path = OUTPUT_DIR / "course_list_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
-            print(f"과목 목록을 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
-            print(f"[debug] title={page.title()!r}, url={page.url}")
-            print("=== PAGE_TEXT_PREVIEW ===")
-            print(page.inner_text("body")[:2000])
-            print("=== END PAGE_TEXT_PREVIEW ===")
+            print(f"과목 상세로 진입하지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            browser.close()
+            sys.exit(1)
+
+        print(f"과목 상세 진입 성공 (url={page.url})")
+
+        result = lib.parse_report_table(page)
+        if result is None:
+            OUTPUT_DIR.mkdir(exist_ok=True)
+            debug_path = OUTPUT_DIR / "detail_debug.html"
+            debug_path.write_text(page.content(), encoding="utf-8")
+            print(f"출석 표를 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            browser.close()
+            sys.exit(1)
+
+        long_rows = result["long_rows"]
+        meta_labels = result["meta_labels"]
+
+        print(f"학생 수(데이터 행): {result['student_count']}")
+        print(f"주차 수: {len(result['weeks'])}, 주차별 항목 수: {result['items_per_week']}")
+
+        OUTPUT_DIR.mkdir(exist_ok=True)
+        long_path = OUTPUT_DIR / "attendance_long.csv"
+        lib.write_long_csv(long_rows, meta_labels, long_path)
+        print(f"저장됨: {long_path} ({len(long_rows)}행, long format)")
+
+        fieldnames = meta_labels + ["주차", "항목순번", "출결상태"]
+        print(f"\n=== ATTENDANCE_LONG ({len(long_rows)} rows) ===")
+        print(",".join(fieldnames))
+        for row in long_rows:
+            print(",".join(str(row.get(f, "")) for f in fieldnames))
+        print("=== END ATTENDANCE_LONG ===")
 
         browser.close()
 

@@ -12,7 +12,7 @@ import csv
 import re
 from pathlib import Path
 
-WEEK_RE = re.compile(r"(\d+)\s*주차")
+WEEK_RE = re.compile(r"(\d+)\s*주(?:차)?")
 SORT_LINK_RE = re.compile(r"\s*정렬\s+\S+\s+(오름차순|내림차순)\s*")
 
 SHOW_ALL_LABELS = ("모두", "전체", "All", "전체보기", "전체 보기")
