@@ -155,23 +155,39 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
     """검색된 과목 목록에서 대상 과목을 클릭해 상세 출석부로 이동"""
     rows = page.locator(".IBDataRow")
     row_count = rows.count()
-    target_row = None
 
+    # 이름이 일치하는 모든 행을 먼저 모아서, 분반 지정 없이 여러 개가 걸리면
+    # 아무거나 하나를 조용히 골라버리지 않고 사용자가 분반을 지정하게 한다
+    matches = []
     for i in range(row_count):
         row = rows.nth(i)
         name_cell = row.locator('td[class*="HideCol"][class*="stdNm"]')
         if name_cell.count() == 0 or course_name not in name_cell.first.inner_text():
             continue
-        if section:
-            section_cell = row.locator('td[class*="HideCol"][class*="pruvPrusClgpNm"]')
-            if section_cell.count() == 0 or section_cell.first.inner_text().strip() != section:
-                continue
-        target_row = row
-        break
+        section_cell = row.locator('td[class*="HideCol"][class*="pruvPrusClgpNm"]')
+        row_section = section_cell.first.inner_text().strip() if section_cell.count() > 0 else ""
+        matches.append((row, row_section))
 
-    if target_row is None:
-        print(f"검색 결과에서 '{course_name}'" + (f" (분반 {section})" if section else "") + "를 찾지 못했습니다.")
+    if not matches:
+        print(f"검색 결과에서 '{course_name}'를 찾지 못했습니다.")
         return False
+
+    if section:
+        filtered = [(r, s) for r, s in matches if s == section]
+        if not filtered:
+            available = ", ".join(s for _, s in matches)
+            print(f"'{course_name}'의 분반 '{section}'을 찾지 못했습니다. 존재하는 분반: {available}")
+            return False
+        target_row = filtered[0][0]
+    elif len(matches) > 1:
+        available = ", ".join(s for _, s in matches)
+        print(
+            f"'{course_name}'로 검색된 분반이 {len(matches)}개입니다 ({available}). "
+            "IBK_SECTION(section) 값을 지정해서 다시 실행해주세요."
+        )
+        return False
+    else:
+        target_row = matches[0][0]
 
     link_cell = target_row.locator('td[class*="HideCol"][class*="stdNm"]').first
     link_cell.click()
