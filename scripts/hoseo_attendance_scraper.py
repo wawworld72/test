@@ -77,16 +77,20 @@ def main():
             print("로그인 후에도 리포트 페이지에 접근하지 못했습니다.", file=sys.stderr)
             sys.exit(1)
 
-        found_all = lib.select_show_all(page)
+        found_all = lib.select_show_all(page, TARGET_URL)
         print(f"'모두 보기' 옵션 적용 여부: {found_all}")
 
         OUTPUT_DIR.mkdir(exist_ok=True)
         result = lib.parse_report_table(page)
 
         if result is None:
+            print(f"페이지에서 <table>을 찾지 못했습니다 (url={page.url}, title={page.title()!r}).")
             debug_path = OUTPUT_DIR / "report_page_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
-            print(f"페이지에서 <table>을 찾지 못했습니다. 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            print(f"디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            print("=== PAGE_TEXT_PREVIEW ===")
+            print(page.inner_text("body")[:3000])
+            print("=== END PAGE_TEXT_PREVIEW ===")
             browser.close()
             return
 

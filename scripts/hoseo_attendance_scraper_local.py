@@ -58,7 +58,7 @@ def main():
 
         context.storage_state(path=str(STATE_FILE))
 
-        found_all = lib.select_show_all(page)
+        found_all = lib.select_show_all(page, TARGET_URL)
         print(f"'모두 보기' 옵션 적용 여부: {found_all}")
 
         OUTPUT_DIR.mkdir(exist_ok=True)

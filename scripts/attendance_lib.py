@@ -50,31 +50,64 @@ GRID_JS = r"""
 """
 
 
-def select_show_all(page) -> bool:
-    """'목록수' 등 페이지당 표시 개수 드롭다운/링크에서 '모두'를 선택해 전체 학생을 한 페이지에 표시"""
+def select_show_all(page, original_url: str) -> bool:
+    """'목록수' 등 페이지당 표시 개수 드롭다운/링크에서 '모두'를 선택해 전체 학생을 한 페이지에 표시
+
+    클릭 대상이 리포트 테이블과 무관한 요소일 수 있으므로, 클릭 전후로
+    페이지 URL과 메인 테이블 행 수를 비교해 실제로 반영됐는지 검증한다.
+    검증에 실패하면 원래 URL로 되돌아간다.
+    """
+    before_table = get_main_table(page)
+    before_rows = before_table.locator("tr").count() if before_table else 0
+
+    debug_lines = []
+    applied = False
+
     selects = page.locator("select")
     for i in range(selects.count()):
         sel = selects.nth(i)
+        sel_id = sel.get_attribute("id") or sel.get_attribute("name") or f"select#{i}"
         options = sel.locator("option")
-        for j in range(options.count()):
-            opt = options.nth(j)
-            text = opt.inner_text().strip()
+        option_texts = [options.nth(j).inner_text().strip() for j in range(options.count())]
+        debug_lines.append(f"{sel_id}: options={option_texts}")
+        for j, text in enumerate(option_texts):
             if text in SHOW_ALL_LABELS:
-                value = opt.get_attribute("value")
+                value = options.nth(j).get_attribute("value")
                 sel.select_option(value=value)
                 page.wait_for_load_state("networkidle")
                 page.wait_for_timeout(500)
-                return True
+                applied = True
+                debug_lines.append(f"selected '{text}' (value={value}) from {sel_id}")
+                break
+        if applied:
+            break
 
-    for text in SHOW_ALL_LABELS:
-        link = page.get_by_text(text, exact=True)
-        if link.count() > 0:
-            link.first.click()
-            page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(500)
-            return True
+    if not applied:
+        for text in SHOW_ALL_LABELS:
+            link = page.locator("a, button").filter(has_text=text)
+            link_count = link.count()
+            if link_count > 0:
+                debug_lines.append(f"clickable a/button matching '{text}': count={link_count}")
+                link.first.click()
+                page.wait_for_load_state("networkidle")
+                page.wait_for_timeout(500)
+                applied = True
+                break
 
-    return False
+    for line in debug_lines:
+        print(f"[select_show_all] {line}")
+
+    if applied and "report.php" not in page.url:
+        print(f"[select_show_all] 클릭 후 리포트 페이지를 벗어남 (url={page.url}); 원래 URL로 복귀")
+        page.goto(original_url)
+        page.wait_for_load_state("networkidle")
+        applied = False
+
+    after_table = get_main_table(page)
+    after_rows = after_table.locator("tr").count() if after_table else 0
+    print(f"[select_show_all] rows before={before_rows}, after={after_rows}, applied={applied}, url={page.url}")
+
+    return applied and after_rows >= before_rows
 
 
 def get_main_table(page):
