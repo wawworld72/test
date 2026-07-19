@@ -1,0 +1,35 @@
+name: IBK Campus Attendance Scrape
+
+# 수동 트리거 전용 (workflow_dispatch만). 은행 계열 시스템 특성상 이상거래탐지(FDS)
+# 위험을 먼저 확인하기 전까지는 schedule을 추가하지 않는다.
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Run scraper
+        env:
+          IBK_CAMPUS_USER: ${{ secrets.IBK_CAMPUS_USER }}
+          IBK_CAMPUS_PASS: ${{ secrets.IBK_CAMPUS_PASS }}
+        run: python scripts/ibk_attendance_scraper.py
+
+      - name: Upload output artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ibk-attendance-output
+          path: ibk_attendance_output/
+          retention-days: 14
