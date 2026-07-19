@@ -271,10 +271,15 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
     if not line_table_visible():
         return False
 
-    # 표 골격(헤더)이 보이기 시작해도 학생 데이터(tbody 행)는 뒤이어 AJAX로
-    # 채워지는 것으로 보인다 - 실제로 헤더만 뜬 채 tbody가 아직 빈 상태(또는
-    # 자리표시 행 1개)에서 바로 파싱해 학생 수 1명/주차 수 0으로 나온 적이
-    # 있다. tbody 행 수가 두 번 연속 같은 값으로 안정될 때까지 짧게 폴링한다.
+    select_max_page_size(page)
+
+    # 표 골격(헤더)이 보이기 시작해도 학생 데이터(tbody 행)는 뒤이어 채워지는
+    # 것으로 보인다 - 실제로 헤더만 뜬 채 tbody에 1행만 있는 상태(디버깅으로
+    # 확인해보니 AJAX가 덜 끝난 게 아니라 '페이지당 표시 개수'가 기본값으로
+    # 작게 설정돼 있었던 것 - select_max_page_size로 최댓값을 선택한 뒤에도
+    # 반영에 약간의 시간이 걸릴 수 있어) 바로 파싱해 학생 수 1명/주차 수 0으로
+    # 나온 적이 있다. tbody 행 수가 두 번 연속 같은 값으로 안정될 때까지 짧게
+    # 폴링한다.
     page.wait_for_load_state("networkidle")
     prev_rows = -1
     for _ in range(15):
@@ -285,6 +290,41 @@ def open_course_detail(page, course_name: str, section: str | None) -> bool:
         page.wait_for_timeout(300)
 
     return line_table_visible()
+
+
+def select_max_page_size(page) -> None:
+    """'N개씩 보기' 드롭다운에서 가장 큰 값을 선택해 학생 목록이 여러
+    페이지로 나뉘어 tbody에 일부만 렌더링되는 것을 방지한다.
+
+    실제로 이 드롭다운의 기본값이 작아서(또는 자동화 세션에서 계정별로
+    기억된 값이 없어서) tbody에 학생 1명만 보이는 문제가 있었다 - 수동으로
+    캡처한 페이지는 '50개씩 보기'가 이미 선택돼 있었지만, 새 세션에서는 그
+    선택이 유지되지 않는 것으로 보인다.
+    """
+    page_size_select = page.locator(".total_area .n_select").first
+    if page_size_select.count() == 0:
+        return
+
+    options = page_size_select.locator("li[data-value]")
+    best_value, best_num = None, -1
+    for i in range(options.count()):
+        opt = options.nth(i)
+        value = opt.get_attribute("data-value")
+        if value and value.isdigit() and int(value) > best_num:
+            best_num = int(value)
+            best_value = value
+
+    if best_value is None:
+        return
+
+    target_option = page_size_select.locator(f'li[data-value="{best_value}"]')
+    if "active" in (target_option.first.get_attribute("class") or ""):
+        return
+
+    page_size_select.locator("button.selectBox").click()
+    target_option.first.click()
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(500)
 
 
 def main():
