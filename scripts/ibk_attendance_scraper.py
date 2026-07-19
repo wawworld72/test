@@ -14,17 +14,23 @@ campus.ibk.co.kr (i-on캠퍼스, 호서대학교) 출석 현황 조회 스크래
     2) 학교선택 드롭다운에서 '호서대학교'(data-value=HOSEO)를 선택 (기본값이
        'IBK대학교'인 경우가 있어 명시적으로 선택해야 함)
     3) 아이디/비밀번호 입력 후 로그인
-    4) 현재 페이지의 모든 <table>을 CSV로 저장하고 stdout에도 출력 (읽기 전용,
-       다른 액션은 수행하지 않음)
+    4) 좌측 메뉴(전자출결관리 > 전자출결 > 주차별 출석부 조회)로 이동해
+       담당 과목 목록을 조회
+    5) 목록은 IBSheet 그리드 위젯(일반 <table>이 아님)이라, 각 셀의
+       class에 박혀 있는 'HideCol0<필드명>'으로 필드를 식별해 추출.
+       CSV로 저장하고 stdout에도 출력 (읽기 전용, 다른 액션은 수행하지 않음)
 """
 
 import csv
 import os
+import re
 import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+ATTENDANCE_MENU_TEXT = "주차별 출석부 조회"
 
 TARGET_URL = "https://campus.ibk.co.kr/admin/"
 USERNAME = os.environ.get("IBK_CAMPUS_USER")
@@ -76,42 +82,71 @@ def try_login(page) -> bool:
     return not looks_like_login_page(page)
 
 
-def dump_all_tables(page, output_dir: Path) -> list[Path]:
+def navigate_to_attendance_list(page) -> bool:
+    """좌측 메뉴(전자출결관리 > 전자출결 > 주차별 출석부 조회)를 통해 과목 목록 화면으로 이동"""
+    target_btn = page.get_by_text(ATTENDANCE_MENU_TEXT, exact=True)
+    if target_btn.count() == 0:
+        print(f"메뉴에서 '{ATTENDANCE_MENU_TEXT}'를 찾지 못했습니다.")
+        return False
+
+    if not target_btn.first.is_visible():
+        top_menu = page.locator("button.menu_wrap.menu01")
+        if top_menu.count() > 0 and top_menu.first.is_visible():
+            top_menu.first.click()
+            page.wait_for_timeout(300)
+
+        sub_menu = page.get_by_text("전자출결", exact=True)
+        if sub_menu.count() > 0 and sub_menu.first.is_visible():
+            sub_menu.first.click()
+            page.wait_for_timeout(300)
+
+    target_btn.first.click()
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(800)
+    return True
+
+
+def extract_ibsheet_rows(page) -> list[dict]:
+    """IBSheet 그리드에서 실제 데이터 행(.IBDataRow)만 추출.
+    각 셀의 class에 'HideCol0<필드명>'이 그대로 박혀 있어 필드명 매핑에 사용."""
+    data_rows = page.locator(".IBDataRow")
+    row_count = data_rows.count()
+    results = []
+    for i in range(row_count):
+        row = data_rows.nth(i)
+        cells = row.locator('td[class*="HideCol0"]')
+        cell_count = cells.count()
+        row_data = {}
+        for c in range(cell_count):
+            cell = cells.nth(c)
+            cls = cell.get_attribute("class") or ""
+            m = re.search(r"HideCol0(\S+)", cls)
+            field = m.group(1) if m else f"col_{c}"
+            row_data[field] = cell.inner_text().strip()
+        if row_data:
+            results.append(row_data)
+    return results
+
+
+def dump_ibsheet_rows(rows: list[dict], output_dir: Path, name: str) -> Path | None:
+    if not rows:
+        return None
+
     output_dir.mkdir(exist_ok=True)
-    tables = page.locator("table")
-    count = tables.count()
-    if count == 0:
-        print("페이지에서 <table>을 찾지 못했습니다.")
-        return []
+    fieldnames = list(rows[0].keys())
+    out_path = output_dir / f"{name}.csv"
+    with out_path.open("w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
-    saved_files = []
-    for i in range(count):
-        table = tables.nth(i)
-        rows = table.locator("tr")
-        row_count = rows.count()
-        data = []
-        for r in range(row_count):
-            cells = rows.nth(r).locator("th, td")
-            cell_count = cells.count()
-            row_data = [cells.nth(c).inner_text().strip() for c in range(cell_count)]
-            if row_data:
-                data.append(row_data)
+    print(f"\n=== {name.upper()} ({len(rows)} rows) ===")
+    print(",".join(fieldnames))
+    for row in rows:
+        print(",".join(str(row.get(k, "")) for k in fieldnames))
+    print(f"=== END {name.upper()} ===")
 
-        if not data:
-            continue
-
-        out_path = output_dir / f"table_{i}.csv"
-        with out_path.open("w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.writer(f)
-            writer.writerows(data)
-        saved_files.append(out_path)
-
-        print(f"\n=== TABLE {i} ({len(data)} rows) ===")
-        for row in data:
-            print(",".join(row))
-        print(f"=== END TABLE {i} ===")
-
-    return saved_files
+    return out_path
 
 
 def main():
@@ -133,12 +168,21 @@ def main():
 
         print(f"로그인 성공 (url={page.url})")
 
-        saved = dump_all_tables(page, OUTPUT_DIR)
+        if not navigate_to_attendance_list(page):
+            OUTPUT_DIR.mkdir(exist_ok=True)
+            debug_path = OUTPUT_DIR / "nav_debug.html"
+            debug_path.write_text(page.content(), encoding="utf-8")
+            print(f"메뉴 이동에 실패해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            browser.close()
+            sys.exit(1)
+
+        courses = extract_ibsheet_rows(page)
+        saved = dump_ibsheet_rows(courses, OUTPUT_DIR, "course_list")
         if not saved:
             OUTPUT_DIR.mkdir(exist_ok=True)
             debug_path = OUTPUT_DIR / "page_debug.html"
             debug_path.write_text(page.content(), encoding="utf-8")
-            print(f"저장할 표가 없어 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
+            print(f"과목 목록을 찾지 못해 디버깅용 페이지를 '{debug_path}'에 저장했습니다.")
 
         browser.close()
 
