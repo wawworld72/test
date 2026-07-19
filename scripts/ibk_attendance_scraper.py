@@ -266,6 +266,9 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
+        # 엑셀 다운로드 전에 "개인정보 포함 파일입니다" 류의 네이티브 확인
+        # 대화상자가 뜰 수 있어, 뜨면 자동으로 수락한다.
+        page.on("dialog", lambda dialog: dialog.accept())
 
         page.goto(TARGET_URL)
         page.wait_for_load_state("networkidle")
@@ -311,10 +314,22 @@ def main():
         # '엑셀다운' 버튼으로 받은 xls를 그대로 파싱한다. 이 화면은 aria-label이
         # '엑셀다운로드'로 지정돼 있어(과목 목록 화면의 동일 텍스트 버튼과
         # 구분됨) 다른 숨겨진 화면의 버튼과 헷갈릴 위험이 없다.
-        with page.expect_download() as download_info:
-            page.get_by_role("button", name="엑셀다운로드").click()
-        download_info.value.save_as(str(xls_path))
-        print(f"엑셀 다운로드 저장됨: {xls_path}")
+        excel_button = page.get_by_role("button", name="엑셀다운로드")
+        print(f"[excel] '엑셀다운로드' 버튼 개수: {excel_button.count()}")
+        try:
+            with page.expect_download(timeout=15000) as download_info:
+                excel_button.click()
+            download_info.value.save_as(str(xls_path))
+            print(f"엑셀 다운로드 저장됨: {xls_path}")
+        except PlaywrightTimeoutError:
+            debug_path = OUTPUT_DIR / "excel_click_debug.html"
+            debug_path.write_text(page.content(), encoding="utf-8")
+            print(
+                "다운로드 이벤트가 발생하지 않아 클릭 직후 페이지를 "
+                f"'{debug_path}'에 저장했습니다 (url={page.url})."
+            )
+            browser.close()
+            sys.exit(1)
 
         result = lib.parse_ibk_excel(xls_path)
         if result is None:
