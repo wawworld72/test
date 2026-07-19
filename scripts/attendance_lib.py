@@ -118,14 +118,26 @@ def select_show_all(page, original_url: str) -> bool:
     return applied and after_rows >= before_rows
 
 
-def get_main_table(page):
-    """페이지에서 가장 행이 많은 '보이는' 테이블을 찾는다.
+def get_main_table(page, prefer_selector=None):
+    """페이지에서 출석 표로 보이는 테이블을 찾는다.
 
-    SPA 화면(예: campus.ibk.co.kr)은 이전에 방문한 화면의 테이블을
-    display:none 상태로 DOM에 남겨두는 경우가 있다. 숨겨진 테이블까지
-    포함해 행 수만으로 비교하면, 실제로 보고 있는 출석표 대신 이전
-    화면의 더 큰(숨겨진) 그리드를 잘못 고를 수 있어 보이는 테이블만 대상으로 한다.
+    prefer_selector가 주어지고 그 셀렉터에 해당하는 '보이는' 테이블이
+    있으면 그것을 바로 사용한다 (예: campus.ibk.co.kr의 'table.line_table'
+    처럼 정확한 클래스명을 이미 알고 있는 경우). 그렇지 않으면 행 수가
+    가장 많은 '보이는' 테이블로 추정한다.
+
+    행 수만으로 추정하는 방식은 애매할 수 있다 - SPA 화면(예:
+    campus.ibk.co.kr)은 이전에 방문한 화면의 테이블을 display:none 상태로
+    DOM에 남겨두는 경우가 있어 숨겨진 테이블은 제외하지만, 같은 화면 안에도
+    출석표보다 행이 많은 다른 보이는 테이블(예: 달력)이 있을 수 있어
+    prefer_selector를 아는 경우 그쪽이 훨씬 안정적이다.
     """
+    if prefer_selector:
+        preferred = page.locator(prefer_selector)
+        for i in range(preferred.count()):
+            if preferred.nth(i).is_visible():
+                return preferred.nth(i)
+
     tables = page.locator("table")
     count = tables.count()
     best_idx, best_rows = None, -1
@@ -219,9 +231,9 @@ def build_long_rows(grid, columns, data_rows):
     return long_rows, meta_labels
 
 
-def parse_report_table(page):
+def parse_report_table(page, prefer_selector=None):
     """현재 페이지에서 출석 테이블을 찾아 long-format 행 리스트와 메타 필드 목록을 반환"""
-    table = get_main_table(page)
+    table = get_main_table(page, prefer_selector=prefer_selector)
     if table is None:
         return None
 

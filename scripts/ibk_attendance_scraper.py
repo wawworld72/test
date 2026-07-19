@@ -309,10 +309,10 @@ def main():
         # '엑셀다운' 파일 다운로드는 사이트 측에서 취소시키는 것으로 확인됐다
         # (은행 계열 시스템 특성상 대량 내보내기에 자동화 탐지가 걸려있을 수
         # 있음). 우회를 시도하는 대신, 다운로드가 필요 없는 화면 스크래핑으로
-        # 되돌린다. attendance_lib의 colspan/rowspan 파서를 재사용하되,
-        # SPA가 이전 화면의 테이블을 DOM에 숨겨서 남겨두는 문제 때문에
-        # get_main_table()이 "보이는 테이블만" 고르도록 이미 수정해뒀다.
-        result = lib.parse_report_table(page)
+        # 되돌린다. "보이는 테이블만" 고르는 것만으로는 화면에 달력 등 출석표보다
+        # 행이 많은 다른 보이는 테이블이 있어 여전히 잘못 고를 수 있었기에,
+        # 이 화면의 출석표 클래스명을 정확히 지정해 확실하게 집어낸다.
+        result = lib.parse_report_table(page, prefer_selector="table.line_table")
         if result is None:
             OUTPUT_DIR.mkdir(exist_ok=True)
             debug_path = OUTPUT_DIR / "detail_debug.html"
