@@ -38,6 +38,11 @@
    - 배포 후 나오는 웹앱 URL(`.../exec`)을 복사해둔다 (`GAS_WEBAPP_URL`로 사용).
 7. `clasp login` 후 생성된 `~/.clasprc.json` 파일 내용을 그대로 복사해둔다 (`CLASP_CREDENTIALS`로 사용,
    CI가 이후 자동으로 `clasp push`를 할 수 있게 하는 자격 증명).
+8. `gas` 디렉터리에서 `clasp deployments`를 실행해 방금 만든 웹앱 배포의 ID를 확인하고 복사해둔다
+   (`GAS_DEPLOYMENT_ID`로 사용). **이 단계가 없으면 이후 `clasp push`로 코드를 바꿔도 라이브
+   웹앱은 그대로다** — `clasp push`는 스크립트의 "HEAD"만 갱신하고, 이미 배포된 웹앱 URL은
+   특정 버전에 고정돼 있어서 `clasp deploy -i <deploymentId>`로 그 배포를 새 버전으로 갱신해줘야
+   실제 `/exec` 응답이 바뀐다. `gas-deploy.yml`이 push마다 이 작업을 대신 해준다.
 
 ## GitHub Secrets 등록
 
@@ -46,9 +51,14 @@
 | `CLASP_CREDENTIALS` | 로컬 `~/.clasprc.json` 파일 전체 내용 |
 | `GAS_WEBAPP_URL` | 배포된 웹앱 `/exec` URL |
 | `GAS_API_TOKEN` | `setupApiToken` 실행 로그에 출력된 토큰 |
+| `GAS_DEPLOYMENT_ID` | `clasp deployments`로 확인한 웹앱 배포 ID |
 
-등록 후에는:
-- `gas/**` 변경분을 main에 push하면 `.github/workflows/gas-deploy.yml`이 테스트 후 `clasp push`로 자동 배포한다.
+등록 후에는 **코드를 고치고 main에 push하기만 하면 끝**이다. 복사/붙여넣기나 수동 배포 없이:
+- `gas/**` 변경분을 main에 push → `.github/workflows/gas-deploy.yml`이
+  1) `npm test`로 `attendanceCore.js`/`githubDispatch.js` 테스트 실행
+  2) `clasp push --force`로 코드 반영
+  3) `clasp deploy -i $GAS_DEPLOYMENT_ID`로 같은 웹앱 URL을 새 버전으로 갱신
+  까지 자동으로 처리한다. 테스트가 실패하면 배포 단계는 아예 실행되지 않는다.
 - Hoseo/IBK 출석 스크레이핑 워크플로가 끝나면 `scripts/push_to_sheet.py`가 CSV를 웹앱에 전송해
   같은 스프레드시트의 `Hoseo` / `IBK` 탭을 갱신한다.
 

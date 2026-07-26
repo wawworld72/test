@@ -33,3 +33,9 @@ jobs:
       - name: Push to Apps Script
         run: clasp push --force
         working-directory: gas
+
+      - name: Update live web app deployment
+        run: clasp deploy --deploymentId "$GAS_DEPLOYMENT_ID" --description "GitHub Actions ${{ github.sha }}"
+        working-directory: gas
+        env:
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
