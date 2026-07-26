@@ -38,6 +38,18 @@ GitHub Actions는 `workflow_dispatch` REST API로도 실행 가능하다. GAS에
 이 패턴(적재는 이미 쓰는 저장소에, 조회는 이미 있는 웹앱 엔드포인트로)은 GAS뿐 아니라
 "실행 환경의 표준 로그 시스템에 접근 권한이 없을 때" 일반적으로 쓸 수 있다.
 
+실제로 curl로 검증하며 겪은 것들:
+- Apps Script 웹앱은 실제 응답을 `script.googleusercontent.com`으로 302 리다이렉트한다.
+  `curl -L`(리다이렉트 따라가기) 없이 호출하면 JSON 대신 "Moved Temporarily" HTML만 보게 된다.
+- `clasp deployments`에는 항상 `@HEAD` 배포가 하나 더 보이는데, 이건 Apps Script가 자동으로
+  만드는 테스트용 배포라 "익명 접근 가능한 웹앱"이 아니다. 실제 배포 ID는 버전 번호가 붙은
+  쪽(`@1`, `@2`...)이고, 웹앱 URL은 그 ID로 `https://script.google.com/macros/s/<id>/exec`
+  형태로 바로 만들 수 있다.
+- Claude Code 원격 세션(이 환경)은 네트워크 정책상 `script.google.com` 아웃바운드를 막아서,
+  이 웹앱을 curl/WebFetch로 직접 검증하는 건 사용자 로컬 터미널에서만 가능했다 (GitHub Actions
+  러너는 이런 제약이 없어 CI 쪽 호출은 정상 동작). 원격 세션에서 "직접 호출해서 확인하겠다"고
+  가정하지 말고, 네트워크 정책 때문에 막힐 수 있다는 걸 먼저 확인해야 한다.
+
 ## 6. 시크릿은 저장 위치를 용도에 맞게 분리
 - **GitHub Secrets** (`CLASP_CREDENTIALS`, `GAS_WEBAPP_URL`, `GAS_API_TOKEN`, `GAS_DEPLOYMENT_ID`):
   GitHub Actions가 GAS를 호출/배포할 때 필요한 것들.
