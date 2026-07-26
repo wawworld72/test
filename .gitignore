@@ -4,3 +4,4 @@ ibk_attendance_output/
 ibk_state.json
 __pycache__/
 *.pyc
+node_modules/

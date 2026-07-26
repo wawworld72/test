@@ -37,3 +37,9 @@ jobs:
           name: attendance-output
           path: attendance_output/
           retention-days: 14
+
+      - name: Push to Google Sheet
+        env:
+          GAS_WEBAPP_URL: ${{ secrets.GAS_WEBAPP_URL }}
+          GAS_API_TOKEN: ${{ secrets.GAS_API_TOKEN }}
+        run: python scripts/push_to_sheet.py attendance_output/attendance_long.csv Hoseo
