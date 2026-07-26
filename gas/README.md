@@ -8,9 +8,11 @@
 `workflow_dispatch` API를 직접 호출할 수도 있다. 즉 시트 → GitHub Action 실행 → 시트 갱신까지
 전부 시트 안에서 끝낼 수 있다.
 
-- `Code.js` — `doPost` 핸들러, 시트 쓰기, `onOpen` 메뉴, GitHub Action 트리거 함수들, `setupApiToken` 설정용 함수
+- `Code.js` — `doPost`/`doGet` 핸들러, 시트 쓰기, `onOpen` 메뉴, GitHub Action 트리거 함수들,
+  로그 적재/조회(`appendLog`/`readRecentLogs`), `setupApiToken` 설정용 함수
 - `attendanceCore.js` — 요청 검증/정규화 순수 로직 (Jest로 테스트, `attendanceCore.test.js`)
 - `githubDispatch.js` — `workflow_dispatch` 요청 URL/payload 조립 순수 로직 (Jest로 테스트, `githubDispatch.test.js`)
+- `logging.js` — "Logs" 탭에 쓸 행 포맷/트림 계산 순수 로직 (Jest로 테스트, `logging.test.js`)
 - `appsscript.json` — 매니페스트. 웹앱을 "실행: 나", "액세스 권한: 익명 사용자 포함 모두"로 배포
 
 ## 최초 1회 수동 설정 (사람이 직접 Google 계정으로 인증해야 하는 부분)
@@ -80,9 +82,27 @@
    워크플로가 실행되고, 끝나면 자동으로 같은 스프레드시트의 Hoseo/IBK 탭이 갱신된다.
    (IBK는 필수 입력값인 교과목명을 클릭 시 팝업으로 물어본다.)
 
+## 실행 로그 확인 (Claude가 직접 조회)
+
+Apps Script 실행 로그는 금방 사라지고, Cloud Logging은 별도 GCP 프로젝트 연결/API 활성화가
+있어야 조회할 수 있어 번거롭다. 대신 `doPost`/`dispatchWorkflow`가 실행될 때마다 같은
+스프레드시트의 "Logs" 탭(시간/레벨/출처/메시지/상세, 최근 `MAX_LOG_ROWS`(500)건 유지)에
+기록을 남기고, 같은 웹앱의 `doGet`이 그걸 JSON으로 돌려준다:
+
+```
+curl "https://script.google.com/macros/s/xxx/exec?token=<GAS_API_TOKEN>&limit=20"
+```
+
+웹앱 URL과 `GAS_API_TOKEN`을 알려주시면 이후 세션에서 이 명령으로 직접 로그를 조회해 문제를
+진단할 수 있다 (Drive 공유나 GCP 설정 불필요).
+
+**주의**: 이 엔드포인트는 익명 접근이 가능한 웹앱이라 토큰만 알면 누구나 로그를 읽을 수 있다.
+토큰은 `setupApiToken`이 만드는 무작위 UUID이므로 추측은 어렵지만, URL을 남에게 공유하거나
+공개 저장소 등에 노출하지 않도록 주의한다.
+
 ## 테스트
 
 ```
 npm ci
-npm test        # attendanceCore.js 순수 로직 테스트 (Jest)
+npm test        # attendanceCore.js / githubDispatch.js / logging.js 순수 로직 테스트 (Jest)
 ```
