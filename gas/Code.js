@@ -133,7 +133,8 @@ function triggerHoseoWorkflow() {
 
 function triggerIbkWorkflow() {
   var ui = SpreadsheetApp.getUi();
-  var courseResponse = ui.prompt('IBK 출결 갱신', '조회할 교과목명을 입력하세요 (필수)', ui.ButtonSet.OK_CANCEL);
+
+  var courseResponse = ui.prompt('IBK 출결 갱신 (1/3)', '조회할 교과목명을 입력하세요 (필수)', ui.ButtonSet.OK_CANCEL);
   if (courseResponse.getSelectedButton() !== ui.Button.OK) {
     return;
   }
@@ -142,7 +143,30 @@ function triggerIbkWorkflow() {
     ui.alert('교과목명을 입력해야 합니다.');
     return;
   }
-  dispatchWorkflow('ibk-attendance-scrape.yml', { course_name: courseName });
+
+  var semesterResponse = ui.prompt(
+    'IBK 출결 갱신 (2/3)',
+    '년도/학기 (예: 2026년도 1학기). 비워두면 화면 기본값 사용 — 취소해도 계속 진행됩니다',
+    ui.ButtonSet.OK_CANCEL
+  );
+  var semester = semesterResponse.getSelectedButton() === ui.Button.OK ? semesterResponse.getResponseText().trim() : '';
+
+  var sectionResponse = ui.prompt(
+    'IBK 출결 갱신 (3/3)',
+    '분반 (예: 01). 같은 과목에 여러 분반이 있을 때만 입력 — 취소해도 계속 진행됩니다',
+    ui.ButtonSet.OK_CANCEL
+  );
+  var section = sectionResponse.getSelectedButton() === ui.Button.OK ? sectionResponse.getResponseText().trim() : '';
+
+  var inputs = { course_name: courseName };
+  if (semester) {
+    inputs.semester = semester;
+  }
+  if (section) {
+    inputs.section = section;
+  }
+
+  dispatchWorkflow('ibk-attendance-scrape.yml', inputs);
 }
 
 /**
