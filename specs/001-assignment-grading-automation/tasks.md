@@ -233,13 +233,13 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 ### Implementation for User Story 6
 
-- [ ] T047 [US6] `assignment-automation/src/logic/dashboard.js`: 주차·유형별 게시상태·진행상태,
+- [X] T047 [US6] `assignment-automation/src/logic/dashboard.js`: 주차·유형별 게시상태·진행상태,
   제출/미제출, 대기 중인 처리, 실패 항목 집계 (FR-041)
-- [ ] T048 [US6] `assignment-automation/src/gateway/mailGateway.js`에 일일 요약 메일 추가(강좌
+- [X] T048 [US6] `assignment-automation/src/gateway/mailGateway.js`에 일일 요약 메일 추가(강좌
   설정의 교사 이메일, 고정 시각 트리거) (FR-042)
-- [ ] T049 [US6] `assignment-automation/src/entrypoints/Menu.js`: 예외 복구 메뉴(오류 과제
+- [X] T049 [US6] `assignment-automation/src/entrypoints/Menu.js`: 예외 복구 메뉴(오류 과제
   재진행, 이의신청 재전송, 정의 변경 후 소급 재계산) (FR-043, FR-044, FR-045)
-- [ ] T050 [US6] `gradeSendPolicy.js`/`stateTransition.js` 재사용을 통해 예외 복구 동작이
+- [X] T050 [US6] `gradeSendPolicy.js`/`stateTransition.js` 재사용을 통해 예외 복구 동작이
   멱등임을 보장(재실행 안전) (FR-046)
 
 **Checkpoint**: 교사가 시트 밖에서 아무것도 안 해도 실패를 놓치지 않고 직접 복구 가능.

@@ -23,7 +23,7 @@ function createAssignmentRowsForWeek(weekNumber) {
     existingKeys[row['주제'] + '::' + row['역량과제']] = true;
   });
 
-  var defaultEndTime = readCourseConfigValue_(ss, '기본종료시각') || '18:00';
+  var defaultEndTime = readCourseConfigValue(ss, '기본종료시각') || '18:00';
   var newRows = [];
 
   grouped.order.forEach(function (type) {
@@ -93,7 +93,7 @@ function resolveEffectiveSchedule(formsRow) {
   };
 }
 
-function readCourseConfigValue_(ss, key) {
+function readCourseConfigValue(ss, key) {
   var sheet = ss.getSheetByName(SHEET_NAMES.COURSE_CONFIG);
   var rows = readRowsAsObjects(sheet);
   var match = rows.filter(function (row) {

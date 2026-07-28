@@ -132,12 +132,17 @@ function returnGradesToClassroom(formsRow, courseId, dryRun) {
     appendRowsBatched(changeLogSheet, changeLogRowsToAppend);
   }
 
-  if (!dryRun && failedCount === 0 && sentCount + skippedCount === rows.length) {
+  var alreadyReturned = formsRow['진행상태'] === PROGRESS_STATUS.RETURNED;
+  if (!dryRun && failedCount === 0 && sentCount + skippedCount === rows.length && !alreadyReturned) {
     updateFormsRowField_(formsRow, {
       진행상태: transitionProgress(formsRow['진행상태'], PROGRESS_STATUS.RETURNED),
       성적전송: true,
       전송시각: now,
     });
+  } else if (!dryRun && alreadyReturned && sentCount > 0) {
+    // FR-044 이의신청 재전송: 이미 반환완료 상태에서 점수만 고쳐 다시 보낸 경우 —
+    // 상태는 그대로 반환완료를 유지하되 전송시각만 갱신한다(재전송 이력 확인용).
+    updateFormsRowField_(formsRow, { 전송시각: now });
   }
 
   return { sent: sentCount, skipped: skippedCount, failed: failedCount };

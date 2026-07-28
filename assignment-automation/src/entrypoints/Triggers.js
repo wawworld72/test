@@ -16,8 +16,8 @@ function runAssignmentPreparation() {
     var definitionSheet = getSheetOrThrow(ss, SHEET_NAMES.ASSIGNMENT_DEFINITION);
     var grouped = groupDefinitionRowsByType(readRowsAsObjects(definitionSheet));
 
-    var courseId = readCourseConfigValue_(ss, '코스식별자');
-    var semesterLabel = readCourseConfigValue_(ss, '학기') + ' ' + readCourseConfigValue_(ss, '과목명');
+    var courseId = readCourseConfigValue(ss, '코스식별자');
+    var semesterLabel = readCourseConfigValue(ss, '학기') + ' ' + readCourseConfigValue(ss, '과목명');
 
     var rows = readRowsAsObjects(formsSheet);
     var updates = [];
@@ -101,6 +101,26 @@ function ensureInstallableTriggers() {
   if (existingHandlers.indexOf('runGradingPipeline') === -1) {
     ScriptApp.newTrigger('runGradingPipeline').timeBased().everyMinutes(30).create();
   }
+  if (existingHandlers.indexOf('runDailySummary') === -1) {
+    var summaryTime = readCourseConfigValue(getBoundSpreadsheet(), '일일요약발송시각');
+    var hour = summaryTime ? Number(String(summaryTime).split(':')[0]) : 8;
+    ScriptApp.newTrigger('runDailySummary').timeBased().everyDays(1).atHour(hour).create();
+  }
+}
+
+/**
+ * UC-26/FR-042: 하루 동안 쌓인 실패·대기 항목을 건별이 아닌 1일 1회 요약으로 교사에게
+ * 통지한다. 현황 시트도 같이 갱신해 시트를 열었을 때도 최신값을 보게 한다(FR-041).
+ */
+function runDailySummary() {
+  return runWithExclusiveLock('runDailySummary', function () {
+    var ss = getBoundSpreadsheet();
+    refreshDashboard();
+    var rows = buildDashboardRows(readRowsAsObjects(getSheetOrThrow(ss, SHEET_NAMES.FORMS)));
+    var summaryText = buildDailySummaryText(rows);
+    var teacherEmail = readCourseConfigValue(ss, '교사이메일');
+    return sendDailySummary(summaryText, teacherEmail);
+  });
 }
 
 /**
@@ -130,7 +150,7 @@ function runScheduledProcessing() {
     var startedAt = Date.now();
     var ss = getBoundSpreadsheet();
     var formsSheet = getSheetOrThrow(ss, SHEET_NAMES.FORMS);
-    var retryLimit = Number(readCourseConfigValue_(ss, '재시도한도')) || 3;
+    var retryLimit = Number(readCourseConfigValue(ss, '재시도한도')) || 3;
 
     var now = new Date();
     var rows = readRowsAsObjects(formsSheet);
@@ -250,11 +270,11 @@ function runGradingPipeline() {
   return runWithExclusiveLock('runGradingPipeline', function () {
     var ss = getBoundSpreadsheet();
     var formsSheet = getSheetOrThrow(ss, SHEET_NAMES.FORMS);
-    var courseId = readCourseConfigValue_(ss, '코스식별자');
-    var dryRun = String(readCourseConfigValue_(ss, '드라이런')).toUpperCase() === 'TRUE';
-    var notifyEnabled = String(readCourseConfigValue_(ss, '학생통지')).toUpperCase() === 'TRUE';
-    var autoReturnEnabled = String(readCourseConfigValue_(ss, '성적자동반환')).toUpperCase() === 'TRUE';
-    var variantCount = Number(readCourseConfigValue_(ss, '퀴즈변형수')) || 1;
+    var courseId = readCourseConfigValue(ss, '코스식별자');
+    var dryRun = String(readCourseConfigValue(ss, '드라이런')).toUpperCase() === 'TRUE';
+    var notifyEnabled = String(readCourseConfigValue(ss, '학생통지')).toUpperCase() === 'TRUE';
+    var autoReturnEnabled = String(readCourseConfigValue(ss, '성적자동반환')).toUpperCase() === 'TRUE';
+    var variantCount = Number(readCourseConfigValue(ss, '퀴즈변형수')) || 1;
 
     var allFormsRows = readRowsAsObjects(formsSheet);
     var rows = allFormsRows.filter(function (row) {
