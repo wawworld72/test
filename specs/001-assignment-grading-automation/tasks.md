@@ -51,13 +51,13 @@ description: "Task list for 과제 운영·평가·성적 환류 자동화"
 
 **⚠️ CRITICAL**: 이 단계 완료 전에는 User Story 작업을 시작하지 않는다.
 
-- [ ] T005 `assignment-automation/src/gateway/sheetsGateway.js`: 헤더 이름 기반 열 조회/범위 단위
+- [X] T005 `assignment-automation/src/gateway/sheetsGateway.js`: 헤더 이름 기반 열 조회/범위 단위
   읽기·쓰기 공용 헬퍼(`getColumnIndexByHeader`, `readRowsAsObjects`, `writeRowsBatched` 등) 구현.
   이후 모든 게이트웨이·로직 모듈이 시트에 접근하는 유일한 경로(헌법 IV·VI)
-- [ ] T006 [P] `assignment-automation/src/gateway/lockGateway.js`: `LockService.getScriptLock().
+- [X] T006 [P] `assignment-automation/src/gateway/lockGateway.js`: `LockService.getScriptLock().
   tryLock(0)` 기반 실행 잠금 래퍼, try/finally로 항상 해제 (FR-061) — 모든 트리거/메뉴 진입점이
   최상단에서 호출
-- [ ] T007 [P] `assignment-automation/src/gateway/stateStore.js`: `PropertiesService` 기반 실행
+- [X] T007 [P] `assignment-automation/src/gateway/stateStore.js`: `PropertiesService` 기반 실행
   상태 저장 헬퍼(다음 처리 시각, 처리 재개 지점) (FR-017, FR-021) — 전역 가변 상태 대신 이곳에만
   상태를 둔다(헌법 VI)
 
