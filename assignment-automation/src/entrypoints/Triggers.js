@@ -254,8 +254,10 @@ function runGradingPipeline() {
     var dryRun = String(readCourseConfigValue_(ss, '드라이런')).toUpperCase() === 'TRUE';
     var notifyEnabled = String(readCourseConfigValue_(ss, '학생통지')).toUpperCase() === 'TRUE';
     var autoReturnEnabled = String(readCourseConfigValue_(ss, '성적자동반환')).toUpperCase() === 'TRUE';
+    var variantCount = Number(readCourseConfigValue_(ss, '퀴즈변형수')) || 1;
 
-    var rows = readRowsAsObjects(formsSheet).filter(function (row) {
+    var allFormsRows = readRowsAsObjects(formsSheet);
+    var rows = allFormsRows.filter(function (row) {
       var active = row['활성'] === true || row['활성'] === 'TRUE';
       var relevant = row['진행상태'] === PROGRESS_STATUS.GRADING || row['진행상태'] === PROGRESS_STATUS.EVALUATED;
       return active && relevant;
@@ -267,9 +269,20 @@ function runGradingPipeline() {
         flagNonCourseMembers_(row, courseId);
 
         if (row['진행상태'] === PROGRESS_STATUS.GRADING) {
-          prepareEvaluationColumns(row);
-          collectEvaluations(row);
-          computeGradesAndAdvanceState(row);
+          if (row['역량과제'] === '퀴즈 풀기') {
+            processQuizGrading_(row, allFormsRows);
+          } else {
+            prepareEvaluationColumns(row);
+            collectEvaluations(row);
+            computeGradesAndAdvanceState(row);
+          }
+
+          if (row['역량과제'] === '문제 만들기') {
+            var linkedQuiz = findLinkedFormsRow_(allFormsRows, row['주제'], '퀴즈 풀기');
+            if (linkedQuiz) {
+              generateLinkedQuizIfNeeded(row, linkedQuiz, variantCount);
+            }
+          }
         }
 
         var refreshed = readRowsAsObjects(formsSheet).filter(function (r) {
@@ -296,6 +309,67 @@ function runGradingPipeline() {
 
     return processed;
   });
+}
+
+/**
+ * 같은 주제(주차 참조)로 연결된 상대 유형의 Forms 행을 찾는다(연계 과제 관계, data-model.md).
+ * 별도 링크 열 없이 "주제"만으로 런타임에 연결한다.
+ */
+function findLinkedFormsRow_(allFormsRows, topic, type) {
+  var matches = allFormsRows.filter(function (r) {
+    return r['주제'] === topic && r['역량과제'] === type;
+  });
+  return matches.length > 0 ? matches[0] : null;
+}
+
+/**
+ * UC-17/UC-19: 퀴즈 풀기 과제는 일반 루브릭 수집(prepareEvaluationColumns/collectEvaluations)
+ * 대신 자동 채점으로 대체한다. 연계된 문제 만들기 과제가 있으면 문항맵을 대조해 문항 분석까지
+ * 수행하고(FR-037/038), 그 결과로 원본 과제를 평가완료로 강제 전환한다(FR-040). 연계가 없는
+ * 퀴즈(예: 시험)는 문항 분석 없이 정답 대조로 총점만 낸다(FR-039) — 이 경우 문항맵은
+ * quizGeneration.js가 자동 생성하지 않으므로, 교사가 같은 규칙(문항/정답/출제자학번 열)으로
+ * "문항맵_<응답시트명>" 시트를 직접 준비해둬야 자동 채점이 실행된다. 문항맵이 아직 없으면
+ * 이번 주기는 건너뛰고 다음 30분 점검에서 재시도한다(실패로 취급하지 않음).
+ */
+function processQuizGrading_(quizFormsRow, allFormsRows) {
+  var ss = getBoundSpreadsheet();
+  var responseSheet = ss.getSheetByName(quizFormsRow['응답시트']);
+  if (!responseSheet) {
+    return;
+  }
+  var responseRows = readRowsAsObjects(responseSheet);
+  var linkedSource = findLinkedFormsRow_(allFormsRows, quizFormsRow['주제'], '문제 만들기');
+
+  var mapSheetName = linkedSource && linkedSource['응답시트']
+    ? quizAnswerMapSheetName(linkedSource['응답시트'])
+    : quizAnswerMapSheetName(quizFormsRow['응답시트']);
+  var mapSheet = ss.getSheetByName(mapSheetName);
+  if (!mapSheet) {
+    return;
+  }
+  var answerMapRows = readRowsAsObjects(mapSheet);
+
+  var analysisResult = null;
+  var scoresByStudent;
+  if (linkedSource) {
+    analysisResult = analyzeQuizResponses(responseRows, answerMapRows);
+    scoresByStudent = analysisResult.scoresByStudent;
+  } else {
+    scoresByStudent = computeSimpleQuizScores(responseRows, answerMapRows);
+  }
+
+  collectQuizScores(quizFormsRow, scoresByStudent, analysisResult);
+  computeGradesAndAdvanceState(quizFormsRow);
+
+  if (linkedSource) {
+    var formsSheet = getSheetOrThrow(ss, SHEET_NAMES.FORMS);
+    var refreshedQuiz = readRowsAsObjects(formsSheet).filter(function (r) {
+      return r.__row === quizFormsRow.__row;
+    })[0];
+    if (refreshedQuiz && refreshedQuiz['진행상태'] === PROGRESS_STATUS.EVALUATED) {
+      advanceLinkedQuizSourceToEvaluated(linkedSource);
+    }
+  }
 }
 
 /**

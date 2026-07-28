@@ -205,19 +205,19 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 ### Implementation for User Story 5
 
-- [ ] T041 [US5] `assignment-automation/src/logic/quizGeneration.js`: 문항 생성(학생별 변형
+- [X] T041 [US5] `assignment-automation/src/logic/quizGeneration.js`: 문항 생성(학생별 변형
   선택, 출처 식별 표시, 페이지 분할) (FR-035)
-- [ ] T042 [US5] `assignment-automation/src/logic/quizGeneration.js`에 손상 셀 복구 추가(원본
+- [X] T042 [US5] `assignment-automation/src/logic/quizGeneration.js`에 손상 셀 복구 추가(원본
   문자열 보관 열 기반 재파싱, 유효 문항 0개 시 실패 처리) (FR-036)
-- [ ] T043 [US5] `assignment-automation/src/logic/itemAnalysis.js`: 자동 채점 + 문항 지표(정답률/
+- [X] T043 [US5] `assignment-automation/src/logic/itemAnalysis.js`: 자동 채점 + 문항 지표(정답률/
   변별력/총점 상관/신뢰도/오답 분포/상위-하위 정답률) 산출, 분류(오류 의심/오개념/함정/폐기
   검토/우수), 정답 불일치 식별 (FR-037, FR-038)
-- [ ] T044 [US5] `assignment-automation/src/logic/itemAnalysis.js`에 연계 없는 퀴즈(시험) 예외
+- [X] T044 [US5] `assignment-automation/src/logic/itemAnalysis.js`에 연계 없는 퀴즈(시험) 예외
   처리 추가(문항 생성·분석 스킵, 자동 채점 환산만, 실패 아님) (FR-039)
-- [ ] T045 [US5] `assignment-automation/src/logic/quizGeneration.js`(또는 별도 연동 지점)에서
+- [X] T045 [US5] `assignment-automation/src/logic/quizGeneration.js`(또는 별도 연동 지점)에서
   `stateTransition.js`를 재사용해 연계 문제 만들기 과제를 채점 완료 시 진행상태 평가완료로 전환
   (FR-040)
-- [ ] T046 [US5] `assignment-automation/src/entrypoints/Triggers.js`: 퀴즈 유형 후속 처리 연결
+- [X] T046 [US5] `assignment-automation/src/entrypoints/Triggers.js`: 퀴즈 유형 후속 처리 연결
   (문항 생성→자동 채점/분석→연계 완료 처리)
 
 **Checkpoint**: 문제 만들기→퀴즈 풀기 연계 파이프라인이 US3 종료 이벤트 위에서 독립 동작.
