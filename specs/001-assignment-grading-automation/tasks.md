@@ -103,9 +103,9 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] `assignment-automation/src/logic/studentId.js`: 학번 정규화 순수 함수
+- [X] T013 [P] [US2] `assignment-automation/src/logic/studentId.js`: 학번 정규화 순수 함수
   (공백/구분자 제거, 자리수 통일 등 표기가 달라도 동일 학생으로 인식)
-- [ ] T014 [US2] `assignment-automation/test/studentId.test.js`: T013 구현 전에 실패하는 테스트
+- [X] T014 [US2] `assignment-automation/test/studentId.test.js`: T013 구현 전에 실패하는 테스트
   먼저 작성, 분기 100% 커버리지 (표기가 다른 동일 학번, 공백/특수문자 포함, 빈 값)
 - [ ] T015 [US2] `assignment-automation/src/logic/assignmentSetup.js`: 과제 행 생성(유형별 Forms
   행 생성, 수업일+유형 오프셋/기간으로 시작·종료 자동 계산, override 우선) (FR-010, FR-011,
@@ -136,10 +136,10 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 ### Implementation for User Story 3
 
-- [ ] T022 [P] [US3] `assignment-automation/src/logic/stateTransition.js`: 게시상태(대기/게시/
+- [X] T022 [P] [US3] `assignment-automation/src/logic/stateTransition.js`: 게시상태(대기/게시/
   오류)·진행상태(대기/수집중/채점중/평가완료/반환완료/오류) 전이 판정 순수 함수
   (data-model.md 상태 전이도 기준)
-- [ ] T023 [US3] `assignment-automation/test/stateTransition.test.js`: T022 구현 전에 실패하는
+- [X] T023 [US3] `assignment-automation/test/stateTransition.test.js`: T022 구현 전에 실패하는
   테스트 먼저 작성, 분기 100% 커버리지(정상 전이 전부 + 오류 전이 + 잘못된 전이 거부)
 - [ ] T024 [US3] `assignment-automation/src/logic/scheduling.js`: 아직 처리되지 않은 모든 시작·
   종료 시각 중 가장 가까운 미래 시각 하나만 다음 실행으로 계산 (FR-017)
@@ -165,13 +165,13 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 ### Implementation for User Story 4
 
-- [ ] T029 [P] [US4] `assignment-automation/src/logic/scoring.js`: 원점수→등급구간 판정 순수
+- [X] T029 [P] [US4] `assignment-automation/src/logic/scoring.js`: 원점수→등급구간 판정 순수
   함수(`scoreToGrade`, 하한 내림차순 평가, 최고 하한 초과 시 최고 구간 적용)
-- [ ] T030 [US4] `assignment-automation/test/scoring.test.js`: T029 구현 전에 실패하는 테스트
+- [X] T030 [US4] `assignment-automation/test/scoring.test.js`: T029 구현 전에 실패하는 테스트
   먼저 작성, 분기 100% 커버리지(각 구간 경계값, 최고 하한 초과, 원점수 0)
-- [ ] T031 [P] [US4] `assignment-automation/src/logic/gradeSendPolicy.js`: 성적 전송 여부(멱등)
+- [X] T031 [P] [US4] `assignment-automation/src/logic/gradeSendPolicy.js`: 성적 전송 여부(멱등)
   판정 순수 함수(이미 같은 점수로 반환됐으면 전송 대상 아님)
-- [ ] T032 [US4] `assignment-automation/test/gradeSendPolicy.test.js`: T031 구현 전에 실패하는
+- [X] T032 [US4] `assignment-automation/test/gradeSendPolicy.test.js`: T031 구현 전에 실패하는
   테스트 먼저 작성, 분기 100% 커버리지(값 동일/변경/최초 전송)
 - [ ] T033 [US4] `assignment-automation/src/logic/evaluationCollection.js`: 평가 항목 열 준비
   (선택지→드롭다운, 판정수식→셀 수식 이식, 팀 대표 행 최초 1회 고정 기록) (FR-022, FR-023,
