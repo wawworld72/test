@@ -75,18 +75,18 @@ description: "Task list for 과제 운영·평가·성적 환류 자동화"
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] `assignment-automation/src/logic/configBootstrap.js`: 강좌설정·역량과제정의·
+- [X] T008 [US1] `assignment-automation/src/logic/configBootstrap.js`: 강좌설정·역량과제정의·
   수강생·주차·Forms·역량과제·변경이력 7개 시트 생성, 헤더 메모, 구역별 서식/보호/드롭다운, 예시
   유형 값 채움, 멱등 재실행(기존 데이터 보존, 누락 열만 추가) (FR-001~005)
-- [ ] T009 [US1] `assignment-automation/src/logic/validation.js`: 필수 시트/열 누락, 유형 첫 행
+- [X] T009 [US1] `assignment-automation/src/logic/validation.js`: 필수 시트/열 누락, 유형 첫 행
   속성 누락, 유형 그룹 내 불일치, 배점 합 0, 항목명 중복, 참조 열 충돌, 미해결 수식 참조, 다른
   시트 참조 수식, 연계 유형명 부재, 활성 행 주제 누락, 시작/종료 공백, 등급구간(내림차순/마지막0/
   중복/최댓값) 검증 (FR-006, FR-007, FR-008)
-- [ ] T010 [US1] `assignment-automation/src/logic/validation.js`에 판정수식 표본 미리보기 검증
+- [X] T010 [US1] `assignment-automation/src/logic/validation.js`에 판정수식 표본 미리보기 검증
   추가: 표본 데이터에 적용한 결과 미리보기, 미해결 참조 식별 (FR-009)
-- [ ] T011 [US1] `assignment-automation/src/entrypoints/Menu.js`: "초기 설정" 메뉴 항목
+- [X] T011 [US1] `assignment-automation/src/entrypoints/Menu.js`: "초기 설정" 메뉴 항목
   (`configBootstrap` 호출, lockGateway 적용)
-- [ ] T012 [US1] `assignment-automation/src/entrypoints/Menu.js`: "정합성 검증" 메뉴 항목
+- [X] T012 [US1] `assignment-automation/src/entrypoints/Menu.js`: "정합성 검증" 메뉴 항목
   (`validation` 호출, 결과를 `getUi().alert()`로 표시 — 이 진입점 계층에서만 UI 호출 허용)
 
 **Checkpoint**: 빈 스프레드시트에서 초기 설정 → 값 입력 → 정합성 검증까지 독립적으로 동작.
