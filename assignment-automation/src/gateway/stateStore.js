@@ -50,3 +50,11 @@ function millisecondsRemaining(startedAt, budgetMs) {
   var elapsed = Date.now() - startedAt;
   return budgetMs - elapsed;
 }
+
+/**
+ * 레포에 커밋되지 않는 자격 증명(예: Dynalist API 토큰)을 읽는다 — CLAUDE.md에 정리된 관례대로
+ * 코드가 실행 중에 참조하는 비밀값은 시트가 아니라 GAS 스크립트 속성에만 둔다.
+ */
+function getScriptProperty(key) {
+  return getProperties_().getProperty(key);
+}

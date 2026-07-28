@@ -59,7 +59,7 @@ function groupDefinitionRowsByType(rows) {
   return { groups: groups, order: order };
 }
 
-var TYPE_LEVEL_ATTRIBUTES = ['템플릿Form', '팀평가여부', '시작오프셋', '기간', '등급구간'];
+var TYPE_LEVEL_ATTRIBUTES = ['템플릿Form', '팀평가여부', '시작오프셋', '기간', '등급구간', '누적반영가중치'];
 
 function validateAssignmentDefinitions_(ss) {
   var issues = [];

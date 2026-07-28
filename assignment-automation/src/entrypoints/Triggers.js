@@ -381,6 +381,10 @@ function processQuizGrading_(quizFormsRow, allFormsRows) {
   collectQuizScores(quizFormsRow, scoresByStudent, analysisResult);
   computeGradesAndAdvanceState(quizFormsRow);
 
+  if (analysisResult) {
+    sendImprovementItemsIfEnabled_(analysisResult.items);
+  }
+
   if (linkedSource) {
     var formsSheet = getSheetOrThrow(ss, SHEET_NAMES.FORMS);
     var refreshedQuiz = readRowsAsObjects(formsSheet).filter(function (r) {
@@ -390,6 +394,23 @@ function processQuizGrading_(quizFormsRow, allFormsRows) {
       advanceLinkedQuizSourceToEvaluated(linkedSource);
     }
   }
+}
+
+/**
+ * UC-27/FR-047: 문항 분석 결과 중 개선이 필요한(또는 우수) 문항 표본을 Dynalist로 보낸다.
+ * 강좌설정의 외부전송 토글이 꺼져 있거나 문서 식별자·API 토큰이 없으면 조용히 건너뛴다.
+ * 이 전송이 실패해도 예외를 삼켜(dynalistGateway.js) 채점·성적 전송 흐름을 막지 않는다.
+ */
+function sendImprovementItemsIfEnabled_(items) {
+  var ss = getBoundSpreadsheet();
+  var externalSendEnabled = String(readCourseConfigValue(ss, '외부전송')).toUpperCase() === 'TRUE';
+  if (!externalSendEnabled) {
+    return;
+  }
+  var docId = readCourseConfigValue(ss, '외부문서식별자');
+  var apiToken = getScriptProperty('DYNALIST_API_TOKEN');
+  var selected = selectItemsForImprovement(items);
+  sendItemsToDynalist(selected, docId, apiToken);
 }
 
 /**

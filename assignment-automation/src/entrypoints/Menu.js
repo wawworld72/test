@@ -20,7 +20,18 @@ function onOpen() {
         .addItem('이의신청 재전송', 'runResendCorrectedGrade')
         .addItem('정의 변경 후 소급 재계산', 'runRecalculateGrades')
     )
+    .addItem('누적 성적 집계', 'runAggregateGrades')
     .addToUi();
+}
+
+/**
+ * FR-048: 학기 말 누적 성적 집계를 실행해 "누적성적" 시트를 최신 결과로 갱신한다.
+ */
+function runAggregateGrades() {
+  runWithExclusiveLock('runAggregateGrades', function () {
+    var count = aggregateAndWriteGrades();
+    SpreadsheetApp.getUi().alert('누적 성적 집계 완료: 학생 ' + count + '명.');
+  });
 }
 
 /**

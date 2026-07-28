@@ -212,6 +212,29 @@ function computeSimpleQuizScores(responseRows, answerMapRows) {
   return scoresByStudent;
 }
 
+/**
+ * FR-047: 문항 개선 자료로 보낼 대상을 추린다 — 문제 있는 분류(출제 오류 의심/오개념/상위권
+ * 함정)와 정답 불일치 문항은 전부, 우수 문항은 "일부"(표본)만 보낸다. 전부 보내면 개선이
+ * 필요한 자료를 골라낸다는 목적에서 벗어난다.
+ */
+function selectItemsForImprovement(items, excellentSampleSize) {
+  var sampleSize = excellentSampleSize || 3;
+  var problematic = [];
+  var excellent = [];
+  Object.keys(items).forEach(function (title) {
+    var item = items[title];
+    var entry = Object.assign({ 문항: title }, item);
+    var isProblematic =
+      item.분류 === '출제 오류 의심' || item.분류 === '오개념' || item.분류 === '상위권 함정' || item.정답불일치;
+    if (isProblematic) {
+      problematic.push(entry);
+    } else if (item.분류 === '우수 문항') {
+      excellent.push(entry);
+    }
+  });
+  return problematic.concat(excellent.slice(0, sampleSize));
+}
+
 function quizItemAnalysisSheetName(quizResponseSheetName) {
   return '문항분석_' + quizResponseSheetName;
 }
@@ -286,5 +309,6 @@ if (typeof module !== 'undefined') {
     computeSimpleQuizScores: computeSimpleQuizScores,
     collectQuizScores: collectQuizScores,
     quizItemAnalysisSheetName: quizItemAnalysisSheetName,
+    selectItemsForImprovement: selectItemsForImprovement,
   };
 }

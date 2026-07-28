@@ -255,11 +255,11 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 ### Implementation for User Story 7
 
-- [ ] T051 [US7] `assignment-automation/src/gateway/dynalistGateway.js`: `UrlFetchApp` 기반
+- [X] T051 [US7] `assignment-automation/src/gateway/dynalistGateway.js`: `UrlFetchApp` 기반
   문항 개선 자료 전송, 실패를 이 안에서 흡수해 상위 흐름에 전파하지 않음 (FR-047)
-- [ ] T052 [US7] `assignment-automation/src/logic/gradeAggregation.js`: 학생별 여러 주차·과제
+- [X] T052 [US7] `assignment-automation/src/logic/gradeAggregation.js`: 학생별 여러 주차·과제
   반영값 가중 집계, 최종 성적과 산출 근거 제공, 등급구간 자체는 변경하지 않음 (FR-048)
-- [ ] T053 [US7] `assignment-automation/src/entrypoints/Menu.js`: "누적 성적 집계" 메뉴 항목
+- [X] T053 [US7] `assignment-automation/src/entrypoints/Menu.js`: "누적 성적 집계" 메뉴 항목
 
 **Checkpoint**: 부가 기능이 핵심 파이프라인과 독립적으로 추가·제거 가능.
 
