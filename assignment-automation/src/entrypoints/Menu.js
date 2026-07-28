@@ -11,7 +11,35 @@ function onOpen() {
     .createMenu('과제 자동화')
     .addItem('초기 설정', 'runInitialSetup')
     .addItem('정합성 검증', 'runValidation')
+    .addItem('과제 행 생성', 'runCreateAssignmentRows')
     .addToUi();
+}
+
+function runCreateAssignmentRows() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt('과제 행 생성', '몇 주차의 과제를 생성할까요? (숫자만 입력)', ui.ButtonSet.OK_CANCEL);
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+  var weekNumber = Number(response.getResponseText().trim());
+  if (!weekNumber) {
+    ui.alert('올바른 주차 번호를 입력해야 합니다.');
+    return;
+  }
+
+  runWithExclusiveLock('runCreateAssignmentRows', function () {
+    var validationResult = validateConfig();
+    if (!validationResult.ok) {
+      reportValidationResult_(validationResult, '정합성 검증 실패 — 과제 행을 생성하지 않음');
+      return;
+    }
+    var created = createAssignmentRowsForWeek(weekNumber);
+    var ledgerCreated = createLedgerRowsForActiveAssignments();
+    ui.alert(
+      weekNumber + '주차 과제 행 ' + created + '개, 역량과제 대장 행 ' + ledgerCreated + '개 생성됨. ' +
+        '폼·Classroom 게시는 다음 자동 실행에서 이어집니다.'
+    );
+  });
 }
 
 function runInitialSetup() {

@@ -42,7 +42,7 @@ function validateConfig() {
   return { ok: issues.length === 0, issues: issues };
 }
 
-function groupDefinitionRowsByType_(rows) {
+function groupDefinitionRowsByType(rows) {
   var groups = {};
   var order = [];
   rows.forEach(function (row) {
@@ -65,7 +65,7 @@ function validateAssignmentDefinitions_(ss) {
   var issues = [];
   var sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENT_DEFINITION);
   var rows = readRowsAsObjects(sheet);
-  var grouped = groupDefinitionRowsByType_(rows);
+  var grouped = groupDefinitionRowsByType(rows);
 
   grouped.order.forEach(function (type) {
     var groupRows = grouped.groups[type];

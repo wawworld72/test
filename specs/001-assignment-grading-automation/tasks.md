@@ -107,20 +107,20 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
   (공백/구분자 제거, 자리수 통일 등 표기가 달라도 동일 학생으로 인식)
 - [X] T014 [US2] `assignment-automation/test/studentId.test.js`: T013 구현 전에 실패하는 테스트
   먼저 작성, 분기 100% 커버리지 (표기가 다른 동일 학번, 공백/특수문자 포함, 빈 값)
-- [ ] T015 [US2] `assignment-automation/src/logic/assignmentSetup.js`: 과제 행 생성(유형별 Forms
+- [X] T015 [US2] `assignment-automation/src/logic/assignmentSetup.js`: 과제 행 생성(유형별 Forms
   행 생성, 수업일+유형 오프셋/기간으로 시작·종료 자동 계산, override 우선) (FR-010, FR-011,
   FR-012)
-- [ ] T016 [US2] `assignment-automation/src/gateway/formsGateway.js`: 템플릿 Form 복사로 생성
+- [X] T016 [US2] `assignment-automation/src/gateway/formsGateway.js`: 템플릿 Form 복사로 생성
   Form 만들기(제목 조립, 주제 선택지 고정, 응답 목적지 연결, 재실행 시 중복 생성 방지) (FR-013)
-- [ ] T017 [US2] `assignment-automation/src/gateway/formsGateway.js`: 응답 시트 이름 정리·숨김·
+- [X] T017 [US2] `assignment-automation/src/gateway/formsGateway.js`: 응답 시트 이름 정리·숨김·
   링크 기록, 지연 시 재시도 한도 내 이어서 재시도 (FR-014)
-- [ ] T018 [US2] `assignment-automation/src/gateway/classroomGateway.js`: Classroom 과제 게시
+- [X] T018 [US2] `assignment-automation/src/gateway/classroomGateway.js`: Classroom 과제 게시
   (게시예약=시작, 마감=종료, 배점 지정), 과제 식별자 기록, 실패 행 재시도 (FR-015)
-- [ ] T019 [US2] `assignment-automation/src/logic/assignmentSetup.js`: 활성 과제×수강생 교차로
+- [X] T019 [US2] `assignment-automation/src/logic/assignmentSetup.js`: 활성 과제×수강생 교차로
   역량과제 대장 행 생성, 기존 조합 유지 (FR-016)
-- [ ] T020 [US2] `assignment-automation/src/entrypoints/Menu.js`: "과제 행 생성" 메뉴 항목
+- [X] T020 [US2] `assignment-automation/src/entrypoints/Menu.js`: "과제 행 생성" 메뉴 항목
   (교사가 주차 지정, lockGateway 적용)
-- [ ] T021 [US2] `assignment-automation/src/entrypoints/Triggers.js`: 과제 준비 자동화 진입점
+- [X] T021 [US2] `assignment-automation/src/entrypoints/Triggers.js`: 과제 준비 자동화 진입점
   (생성Form→응답시트→Classroom게시→대장생성 순차 호출)
 
 **Checkpoint**: 과제 행 생성 한 번으로 US1 산출물 위에 폼·Classroom 과제·대장까지 자동 완성.
