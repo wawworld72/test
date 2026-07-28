@@ -35,6 +35,7 @@ function runCreateAssignmentRows() {
     }
     var created = createAssignmentRowsForWeek(weekNumber);
     var ledgerCreated = createLedgerRowsForActiveAssignments();
+    rescheduleNextTrigger();
     ui.alert(
       weekNumber + '주차 과제 행 ' + created + '개, 역량과제 대장 행 ' + ledgerCreated + '개 생성됨. ' +
         '폼·Classroom 게시는 다음 자동 실행에서 이어집니다.'
@@ -45,6 +46,7 @@ function runCreateAssignmentRows() {
 function runInitialSetup() {
   runWithExclusiveLock('runInitialSetup', function () {
     var result = bootstrapConfigSheets();
+    ensureInstallableTriggers();
     reportValidationResult_(result, '초기 설정');
   });
 }

@@ -141,15 +141,15 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
   (data-model.md 상태 전이도 기준)
 - [X] T023 [US3] `assignment-automation/test/stateTransition.test.js`: T022 구현 전에 실패하는
   테스트 먼저 작성, 분기 100% 커버리지(정상 전이 전부 + 오류 전이 + 잘못된 전이 거부)
-- [ ] T024 [US3] `assignment-automation/src/logic/scheduling.js`: 아직 처리되지 않은 모든 시작·
+- [X] T024 [US3] `assignment-automation/src/logic/scheduling.js`: 아직 처리되지 않은 모든 시작·
   종료 시각 중 가장 가까운 미래 시각 하나만 다음 실행으로 계산 (FR-017)
-- [ ] T025 [US3] `assignment-automation/src/entrypoints/Triggers.js`: `onEdit` 설치형 트리거로
+- [X] T025 [US3] `assignment-automation/src/entrypoints/Triggers.js`: `onEdit` 설치형 트리거로
   일정/진행상태 수정 시 다음 처리 시각 재계산 (FR-018)
-- [ ] T026 [US3] `assignment-automation/src/entrypoints/Triggers.js`: 시작 시각 처리(설문 게시,
+- [X] T026 [US3] `assignment-automation/src/entrypoints/Triggers.js`: 시작 시각 처리(설문 게시,
   stateTransition으로 상태 전이, 반복 실패 시 오류 전환) (FR-019)
-- [ ] T027 [US3] `assignment-automation/src/entrypoints/Triggers.js`: 종료 시각 처리(응답 중단,
+- [X] T027 [US3] `assignment-automation/src/entrypoints/Triggers.js`: 종료 시각 처리(응답 중단,
   제출/미제출 집계, 상태 전이, 유형별 후속 처리 자동 호출) (FR-020)
-- [ ] T028 [US3] `assignment-automation/src/logic/scheduling.js`에 4분 체크포인트/자기 재예약
+- [X] T028 [US3] `assignment-automation/src/logic/scheduling.js`에 4분 체크포인트/자기 재예약
   추가, `stateStore.js` 재사용 (FR-021)
 
 **Checkpoint**: US2가 만든 과제가 시작·종료 시각에 맞춰 사람 없이 상태 전환.
