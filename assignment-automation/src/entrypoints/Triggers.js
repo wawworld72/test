@@ -94,6 +94,13 @@ function ensureInstallableTriggers() {
       .onEdit()
       .create();
   }
+  // "다음 이벤트" 트리거는 시작·종료 시각이 남아있는 동안만 존재한다. 채점중/평가완료 행은
+  // 교사가 평가를 언제 입력할지 알 수 없어 예측 가능한 다음 시각이 없으므로, 별도의 주기
+  // 트리거로 채점 파이프라인을 정기적으로 점검한다. (시간 기반 트리거 총 3개: 다음 이벤트 +
+  // 이 주기 점검 + 일일 요약 — 헌법의 8개 이하 한도에 여유가 크다.)
+  if (existingHandlers.indexOf('runGradingPipeline') === -1) {
+    ScriptApp.newTrigger('runGradingPipeline').timeBased().everyMinutes(30).create();
+  }
 }
 
 /**
@@ -230,4 +237,106 @@ function attemptCollectionEnd_(row) {
     미제출수: Math.max(rosterCount - submitted, 0),
     진행상태: transitionProgress(row['진행상태'], PROGRESS_STATUS.GRADING),
   };
+}
+
+/**
+ * UC-17/UC-19/UC-20/UC-21/UC-22/UC-23/UC-24: 채점중·평가완료 상태의 과제를 정기적으로
+ * 점검해 평가 준비 → 평가 수집 → 점수 산정 → 성적 반환 → 통지까지 이어서 진행한다
+ * (FR-020 후속 처리, FR-022~034). 교사가 응답 시트에 평가를 언제 입력할지 알 수 없으므로
+ * ensureInstallableTriggers()가 등록한 30분 주기 트리거로 반복 점검한다. 행 단위로 실패를
+ * 격리한다(FR-052).
+ */
+function runGradingPipeline() {
+  return runWithExclusiveLock('runGradingPipeline', function () {
+    var ss = getBoundSpreadsheet();
+    var formsSheet = getSheetOrThrow(ss, SHEET_NAMES.FORMS);
+    var courseId = readCourseConfigValue_(ss, '코스식별자');
+    var dryRun = String(readCourseConfigValue_(ss, '드라이런')).toUpperCase() === 'TRUE';
+    var notifyEnabled = String(readCourseConfigValue_(ss, '학생통지')).toUpperCase() === 'TRUE';
+    var autoReturnEnabled = String(readCourseConfigValue_(ss, '성적자동반환')).toUpperCase() === 'TRUE';
+
+    var rows = readRowsAsObjects(formsSheet).filter(function (row) {
+      var active = row['활성'] === true || row['활성'] === 'TRUE';
+      var relevant = row['진행상태'] === PROGRESS_STATUS.GRADING || row['진행상태'] === PROGRESS_STATUS.EVALUATED;
+      return active && relevant;
+    });
+
+    var processed = 0;
+    rows.forEach(function (row) {
+      try {
+        flagNonCourseMembers_(row, courseId);
+
+        if (row['진행상태'] === PROGRESS_STATUS.GRADING) {
+          prepareEvaluationColumns(row);
+          collectEvaluations(row);
+          computeGradesAndAdvanceState(row);
+        }
+
+        var refreshed = readRowsAsObjects(formsSheet).filter(function (r) {
+          return r.__row === row.__row;
+        })[0];
+
+        if (refreshed && refreshed['진행상태'] === PROGRESS_STATUS.EVALUATED && autoReturnEnabled) {
+          returnGradesToClassroom(refreshed, courseId, dryRun);
+
+          if (notifyEnabled) {
+            var afterReturn = readRowsAsObjects(formsSheet).filter(function (r) {
+              return r.__row === row.__row;
+            })[0];
+            if (afterReturn && afterReturn['진행상태'] === PROGRESS_STATUS.RETURNED) {
+              sendIndividualFeedback(afterReturn);
+            }
+          }
+        }
+        processed += 1;
+      } catch (err) {
+        Logger.log('runGradingPipeline 행 ' + row.__row + ' 실패: ' + err.message);
+      }
+    });
+
+    return processed;
+  });
+}
+
+/**
+ * UC-24 보완: 코스 구성원이 아닌 학생은 자동 채점·성적 전송 대상에서 제외하고 그 사실을
+ * 대장 행 비고에 남긴다(FR-034). 원점수 0 부여 자체는 collectEvaluations의 "미제출" 분기가
+ * 이미 처리한다 — 여기서는 "애초에 이 코스 학생이 아님"만 별도로 표시한다.
+ */
+function flagNonCourseMembers_(formsRow, courseId) {
+  var ss = getBoundSpreadsheet();
+  var ledgerSheet = getSheetOrThrow(ss, SHEET_NAMES.LEDGER);
+  var rows = readRowsAsObjects(ledgerSheet).filter(function (r) {
+    return r['주제'] === formsRow['주제'] && r['역량과제'] === formsRow['역량과제'] && !r['비고'];
+  });
+  if (rows.length === 0) {
+    return;
+  }
+
+  var courseStudents = listCourseStudents(courseId);
+  var roster = readRowsAsObjects(getSheetOrThrow(ss, SHEET_NAMES.ROSTER));
+  var emailByStudentKey = {};
+  roster.forEach(function (r) {
+    emailByStudentKey[normalizeStudentId(r['학번'])] = String(r['이메일']).toLowerCase();
+  });
+  var courseEmails = {};
+  courseStudents.forEach(function (s) {
+    if (s.profile && s.profile.emailAddress) {
+      courseEmails[s.profile.emailAddress.toLowerCase()] = true;
+    }
+  });
+
+  var result = excludeNonCourseMembers(
+    rows,
+    Object.keys(emailByStudentKey).filter(function (key) {
+      return courseEmails[emailByStudentKey[key]];
+    })
+  );
+
+  if (result.excluded.length > 0) {
+    var updates = result.excluded.map(function (r) {
+      return { __row: r.__row, 비고: '코스 구성원 아님 — 자동 채점 대상 제외' };
+    });
+    writeRowObjectsBatched(ledgerSheet, updates);
+  }
 }

@@ -173,23 +173,23 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
   판정 순수 함수(이미 같은 점수로 반환됐으면 전송 대상 아님)
 - [X] T032 [US4] `assignment-automation/test/gradeSendPolicy.test.js`: T031 구현 전에 실패하는
   테스트 먼저 작성, 분기 100% 커버리지(값 동일/변경/최초 전송)
-- [ ] T033 [US4] `assignment-automation/src/logic/evaluationCollection.js`: 평가 항목 열 준비
+- [X] T033 [US4] `assignment-automation/src/logic/evaluationCollection.js`: 평가 항목 열 준비
   (선택지→드롭다운, 판정수식→셀 수식 이식, 팀 대표 행 최초 1회 고정 기록) (FR-022, FR-023,
   FR-024)
-- [ ] T034 [US4] `assignment-automation/src/logic/evaluationCollection.js`: 평가 수집(수집상태
+- [X] T034 [US4] `assignment-automation/src/logic/evaluationCollection.js`: 평가 수집(수집상태
   대기 대장 행만 대상, 제출 없음→원점수 0 확정, 미채점은 대기 유지) (FR-025, FR-026, FR-027)
-- [ ] T035 [US4] `assignment-automation/src/gateway/classroomGateway.js`: `scoring.js` +
+- [X] T035 [US4] `assignment-automation/src/gateway/classroomGateway.js`: `scoring.js` +
   `gradeSendPolicy.js` 결과로 Classroom 제출물에 점수 반영, 드라이런 토글 지원 (FR-028, FR-029,
   FR-030)
-- [ ] T036 [US4] `assignment-automation/src/gateway/sheetsGateway.js`에 변경이력 탭 일괄 append
+- [X] T036 [US4] `assignment-automation/src/gateway/sheetsGateway.js`에 변경이력 탭 일괄 append
   기능 추가(실행 중 메모리에 모은 변경 건만 종료 시 한 번에 기록) (FR-031)
-- [ ] T037 [US4] `assignment-automation/src/gateway/classroomGateway.js`에 성적 전송 실패 학생
+- [X] T037 [US4] `assignment-automation/src/gateway/classroomGateway.js`에 성적 전송 실패 학생
   단위 격리·재시도 추가 (FR-032)
-- [ ] T038 [US4] `assignment-automation/src/gateway/mailGateway.js`: 개인 피드백 통지(항목별
+- [X] T038 [US4] `assignment-automation/src/gateway/mailGateway.js`: 개인 피드백 통지(항목별
   판정+피드백), 발송 한도 시 지점 저장 후 이어 보내기 (FR-033)
-- [ ] T039 [US4] `assignment-automation/src/logic/evaluationCollection.js`에 미제출 처리 추가
+- [X] T039 [US4] `assignment-automation/src/logic/evaluationCollection.js`에 미제출 처리 추가
   (코스 구성원 대조, 원점수 0, 동일한 점수 산정·전송 절차 적용) (FR-034)
-- [ ] T040 [US4] `assignment-automation/src/entrypoints/Triggers.js`: 채점중 이후 체인(평가 열
+- [X] T040 [US4] `assignment-automation/src/entrypoints/Triggers.js`: 채점중 이후 체인(평가 열
   준비→평가 수집→점수 산정→성적 전송→통지) 연결
 
 **Checkpoint**: 교사가 평가만 입력하면 성적 반환·통지까지 끝나는, 이 기능의 핵심 가치 완성.

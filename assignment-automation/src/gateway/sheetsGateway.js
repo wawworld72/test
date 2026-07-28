@@ -8,6 +8,20 @@ function getBoundSpreadsheet() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
+/**
+ * 1-based 열 번호를 A1 표기 열 문자로 바꾼다(1 -> A, 27 -> AA).
+ */
+function columnToLetter(column) {
+  var letter = '';
+  var n = column;
+  while (n > 0) {
+    var remainder = (n - 1) % 26;
+    letter = String.fromCharCode(65 + remainder) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter;
+}
+
 function getSheetOrThrow(ss, sheetName) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -152,5 +166,6 @@ if (typeof module !== 'undefined') {
     writeRowObjectsBatched: writeRowObjectsBatched,
     ensureSheetWithHeaders: ensureSheetWithHeaders,
     appendRowsBatched: appendRowsBatched,
+    columnToLetter: columnToLetter,
   };
 }
