@@ -226,7 +226,7 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 ## Phase 8: User Story 6 - 운영 현황 확인과 예외 복구 (Priority: P2)
 
-**Goal**: 교사가 진행 상태를 한눈에 보고, 실패를 하루 1회로 요약받으며, 오류를 복구한다.
+**Goal**: 교사가 진행상태를 한눈에 보고, 실패를 하루 1회로 요약받으며, 오류를 복구한다.
 
 **Independent Test**: 의도적 실패 상태가 섞인 데이터에서 현황·요약 메일에 실패가 누락 없이
 나타나고, 복구 조작으로 다시 처리 대상이 되는지 확인한다.
@@ -269,9 +269,9 @@ Classroom 과제·역량과제 대장이 모두 채워진다.
 
 **Purpose**: 여러 Story에 걸친 마무리 작업
 
-- [ ] T054 [P] `assignment-automation/README.md` 작성: 최초 clasp 설정(신규 스프레드시트/스크립트
+- [X] T054 [P] `assignment-automation/README.md` 작성: 최초 clasp 설정(신규 스프레드시트/스크립트
   생성, GitHub Secrets/Script Properties) 안내 — `gas/README.md`에서 검증된 패턴 재사용
-- [ ] T055 [P] `assignment-automation/test/run.js` 전체 실행, 4개 순수 함수 모듈(studentId,
+- [X] T055 [P] `assignment-automation/test/run.js` 전체 실행, 4개 순수 함수 모듈(studentId,
   stateTransition, scoring, gradeSendPolicy) 분기 커버리지 100% 확인
 - [ ] T056 quickstart.md 시나리오 1~5를 실제 스프레드시트에서 수동 검증
 

@@ -93,25 +93,32 @@ assignment-automation/
 ├── .claspignore                 # test/ 등 배포 제외 목록
 ├── src/
 │   ├── entrypoints/
-│   │   ├── Menu.js              # onOpen 메뉴: 초기 설정, 과제 행 생성, 예외 복구
+│   │   ├── Menu.js              # onOpen 메뉴: 초기 설정, 과제 행 생성, 현황, 예외 복구, 성적 집계
 │   │   └── Triggers.js          # 시간 기반/onEdit 트리거가 호출하는 얇은 진입점
 │   ├── logic/
 │   │   ├── scoring.js           # 원점수→등급구간 판정 (순수함수, 테스트 대상)
 │   │   ├── studentId.js         # 학번 정규화 (순수함수, 테스트 대상)
 │   │   ├── stateTransition.js   # 게시상태·진행상태 전이 판정 (순수함수, 테스트 대상)
 │   │   ├── gradeSendPolicy.js   # 성적 전송 여부(멱등) 판정 (순수함수, 테스트 대상)
+│   │   ├── configBootstrap.js   # 최초 실행 시 7개 시트 생성/보강, 서식·보호 적용
 │   │   ├── validation.js        # 설정 정합성 검증 (UC-06)
 │   │   ├── scheduling.js        # 다음 처리 시각 계산
 │   │   ├── assignmentSetup.js   # 과제 행 생성, 폼/Classroom 준비 오케스트레이션
 │   │   ├── evaluationCollection.js # 평가 수집·팀 대표 행 판단
+│   │   ├── gradeReturn.js       # 점수 산정, Classroom 성적 반환(멱등)
 │   │   ├── quizGeneration.js    # 연계 과제 문항 생성
-│   │   └── itemAnalysis.js      # 문항 분석 지표 산출
+│   │   ├── itemAnalysis.js      # 문항 분석 지표 산출·자동 채점 반영
+│   │   ├── dashboard.js         # 현황 집계, 일일 요약 본문 구성
+│   │   ├── exceptionRecovery.js # 오류 재진행·소급 재계산 판정
+│   │   └── gradeAggregation.js  # 학기 말 누적 성적 가중 집계
 │   └── gateway/
 │       ├── sheetsGateway.js     # SpreadsheetApp 호출 전담, 헤더명 기반 조회 헬퍼
 │       ├── formsGateway.js      # FormApp/DriveApp 복사·연결
 │       ├── classroomGateway.js  # Classroom 과제 생성·성적 반환
 │       ├── mailGateway.js       # MailApp 통지
-│       └── dynalistGateway.js   # UrlFetchApp 기반 외부 문서 전송
+│       ├── dynalistGateway.js   # UrlFetchApp 기반 외부 문서 전송
+│       ├── lockGateway.js       # LockService 기반 동시 실행 차단
+│       └── stateStore.js        # PropertiesService 기반 체크포인트·스크립트 속성
 └── test/
     ├── assert.js                 # 자체 assert 헬퍼 (외부 프레임워크 없음)
     ├── run.js                    # `node test/run.js`로 전체 실행
