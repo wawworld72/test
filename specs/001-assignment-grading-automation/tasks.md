@@ -30,13 +30,13 @@ description: "Task list for 과제 운영·평가·성적 환류 자동화"
 
 **Purpose**: Apps Script 프로젝트 골격 준비
 
-- [ ] T001 `assignment-automation/`에 `src/entrypoints/`, `src/logic/`, `src/gateway/`, `test/`
+- [X] T001 `assignment-automation/`에 `src/entrypoints/`, `src/logic/`, `src/gateway/`, `test/`
   디렉터리 구조를 plan.md대로 생성
-- [ ] T002 [P] `assignment-automation/appsscript.json` 매니페스트 작성 (V8 런타임, timeZone
+- [X] T002 [P] `assignment-automation/appsscript.json` 매니페스트 작성 (V8 런타임, timeZone
   Asia/Seoul, Classroom Advanced Service 활성화, Sheets/Forms/Gmail/Drive 스코프)
-- [ ] T003 [P] `assignment-automation/.clasp.json` 플레이스홀더와 `assignment-automation/.claspignore`
+- [X] T003 [P] `assignment-automation/.clasp.json` 플레이스홀더와 `assignment-automation/.claspignore`
   작성 (`test/**` 배포 제외, `src/**`·`appsscript.json`만 허용)
-- [ ] T004 [P] `assignment-automation/test/assert.js`(자체 assert 헬퍼: assertEqual, assertThrows,
+- [X] T004 [P] `assignment-automation/test/assert.js`(자체 assert 헬퍼: assertEqual, assertThrows,
   assertDeepEqual 등)와 `assignment-automation/test/run.js`(테스트 파일 전체를 순회 실행하는
   러너, 외부 프레임워크 없음) 작성
 
