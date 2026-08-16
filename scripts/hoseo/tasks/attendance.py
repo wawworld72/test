@@ -11,6 +11,7 @@ Playwright 버전(hoseo_attendance_scraper.py)을 대체한다 - network_diagnos
 from .. import parsing
 
 DEFAULT_URL = "https://learn.hoseo.ac.kr/local/ubonattend/report.php?id=40069"
+SHEET_NAME = "Hoseo"
 
 
 def fetch(session, report_url: str = DEFAULT_URL):

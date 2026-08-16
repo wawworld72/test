@@ -28,6 +28,7 @@ from bs4 import BeautifulSoup
 from .. import parsing
 
 DEFAULT_COURSE_URL = "https://learn.hoseo.ac.kr/course/view.php?id=40069"
+SHEET_NAME = "ForumExport"
 WEEK_RE = re.compile(r"(\d+)\s*주\s*차")
 
 
