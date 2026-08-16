@@ -189,6 +189,27 @@ def main():
         )
         print(f"    section={f['section']!r} text={f['text']!r} export_href={link}")
 
+    print("\n[10] 각 포럼 링크를 감싸는 활동(li.activity) 요소의 class/뱃지 텍스트로 '학생에게 비공개' 상태 마커 확인:")
+    for sec in sections:
+        heading = sec.select_one(".sectionname") or sec.select_one("h3")
+        heading_text = heading.get_text(strip=True) if heading else None
+        for a in sec.select('a[href*="mod/forum/view.php"]'):
+            activity_li = a.find_parent("li", class_=lambda c: c and "activity" in c)
+            container = activity_li or a.find_parent(["li", "div"])
+            classes = container.get("class") if container else None
+            badge_texts = [
+                b.get_text(strip=True)
+                for b in (container.select(".badge, .dimmed_text, .availabilityinfo, .statusspan") if container else [])
+            ]
+            print(
+                f"    section={heading_text!r} text={a.get_text(strip=True)!r}\n"
+                f"        container_tag={container.name if container else None} classes={classes}\n"
+                f"        badge_texts={badge_texts}"
+            )
+            if container:
+                snippet = str(container)
+                print(f"        outer_html(첫 600자)={snippet[:600]!r}")
+
 
 if __name__ == "__main__":
     main()
