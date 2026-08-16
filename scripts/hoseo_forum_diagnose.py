@@ -96,6 +96,49 @@ def main():
     for a in forum_soup.select(".action-menu a, [data-toggle='dropdown'] ~ .dropdown-menu a, .moodle-actionmenu a"):
         print(f"    text={a.get_text(strip=True)!r} href={a.get('href')}")
 
+    export_link = None
+    for a in forum_soup.find_all("a", href=True):
+        if a.get_text(strip=True).lower() == "export" and "mod/forum/export.php" in a["href"]:
+            export_link = a["href"]
+            break
+
+    if not export_link:
+        print("\n[8] 'mod/forum/export.php' 링크를 찾지 못해 이후 단계를 건너뜁니다.")
+        return
+
+    print(f"\n[8] Export 링크 실제 접속: {export_link}")
+    export_resp = session.get(export_link)
+    export_resp.raise_for_status()
+    content_type = export_resp.headers.get("Content-Type", "")
+    print(f"    상태={export_resp.status_code}, Content-Type={content_type!r}, 길이={len(export_resp.text)}자")
+
+    if "csv" in content_type.lower() or "text/plain" in content_type.lower():
+        print("    바로 CSV/텍스트로 응답한 것으로 보입니다. 앞부분 500자:")
+        print(export_resp.text[:500])
+        return
+
+    export_soup = BeautifulSoup(export_resp.text, "html.parser")
+    print(f"    HTML 응답으로 보입니다 (title={export_soup.title.get_text() if export_soup.title else None}).")
+    print("    [8-1] export 페이지 내 <form> 목록:")
+    for form in export_soup.find_all("form"):
+        print(f"        action={form.get('action')} method={form.get('method')}")
+        for field in form.find_all(["input", "select", "textarea"]):
+            print(
+                f"            <{field.name} name={field.get('name')!r} type={field.get('type')!r} "
+                f"value={field.get('value')!r}>"
+            )
+
+    print("\n[9] 나머지 14개 포럼에서도 'Export' 링크가 동일한 패턴으로 나오는지 확인:")
+    for f in forum_links[1:]:
+        r = session.get(f["href"])
+        r.raise_for_status()
+        s = BeautifulSoup(r.text, "html.parser")
+        link = next(
+            (a["href"] for a in s.find_all("a", href=True) if a.get_text(strip=True).lower() == "export"),
+            None,
+        )
+        print(f"    section={f['section']!r} text={f['text']!r} export_href={link}")
+
 
 if __name__ == "__main__":
     main()
