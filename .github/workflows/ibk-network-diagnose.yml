@@ -1,0 +1,42 @@
+name: IBK Network Diagnose
+
+# 로그인/출결 조회 요청이 HTTP 직접 호출(A안)로 대체 가능한지 판단하기 위한
+# 일회성 진단 워크플로. 실제 스크래핑을 수행하지 않고 요청/응답만 관찰한다.
+on:
+  workflow_dispatch:
+    inputs:
+      semester:
+        description: '년도/학기 (예: 2026년도 1학기). 비워두면 화면 기본값 사용'
+        required: false
+        default: ''
+      course_name:
+        description: '조회할 교과목명 (필수 - 상세 화면까지 들어가야 출결 조회 요청을 관찰할 수 있음)'
+        required: true
+      section:
+        description: '분반 (예: 01). 같은 과목에 여러 분반이 있을 때만 지정'
+        required: false
+        default: ''
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Run network diagnose
+        env:
+          IBK_CAMPUS_USER: ${{ secrets.IBK_CAMPUS_USER }}
+          IBK_CAMPUS_PASS: ${{ secrets.IBK_CAMPUS_PASS }}
+          IBK_SEMESTER: ${{ github.event.inputs.semester }}
+          IBK_COURSE_NAME: ${{ github.event.inputs.course_name }}
+          IBK_SECTION: ${{ github.event.inputs.section }}
+        run: python scripts/ibk_network_diagnose.py
