@@ -11,6 +11,7 @@ Playwright 버전(hoseo_attendance_scraper.py)을 대체한다 - network_diagnos
 from .. import parsing
 
 DEFAULT_URL = "https://learn.hoseo.ac.kr/local/ubonattend/report.php?id=40069"
+SHEET_NAME = "Hoseo"
 
 
 def fetch(session, report_url: str = DEFAULT_URL):
@@ -44,3 +45,19 @@ def fetch(session, report_url: str = DEFAULT_URL):
         return before_result
 
     return after_result
+
+
+def write_csv(result, out_path):
+    parsing.write_long_csv(result["long_rows"], result["meta_labels"], out_path)
+
+
+def print_summary(result):
+    print(f"학생 수(데이터 행): {result['student_count']}")
+    print(f"주차 수: {len(result['weeks'])}, 주차별 항목 수: {result['items_per_week']}")
+
+    fieldnames = result["meta_labels"] + ["주차", "항목순번", "출결상태"]
+    print(f"\n=== ATTENDANCE_LONG ({len(result['long_rows'])} rows) ===")
+    print(",".join(fieldnames))
+    for row in result["long_rows"]:
+        print(",".join(str(row.get(f, "")) for f in fieldnames))
+    print("=== END ATTENDANCE_LONG ===")

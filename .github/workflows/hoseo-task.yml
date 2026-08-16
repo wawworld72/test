@@ -14,8 +14,13 @@ on:
         type: choice
         options:
           - attendance
+          - forum_export
       report_url:
         description: '리포트 URL (task=attendance일 때만 사용, 비우면 기본값)'
+        required: false
+        default: ''
+      course_url:
+        description: '과목 페이지 URL (task=forum_export일 때만 사용, 비우면 기본값)'
         required: false
         default: ''
 
@@ -33,13 +38,24 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: Run task
+        id: run_task
         env:
           HOSEO_USERNAME: ${{ secrets.HOSEO_USERNAME }}
           HOSEO_PASSWORD: ${{ secrets.HOSEO_PASSWORD }}
         run: |
           python scripts/run_hoseo_task.py \
             --task "${{ github.event.inputs.task }}" \
-            --report-url "${{ github.event.inputs.report_url }}"
+            --report-url "${{ github.event.inputs.report_url }}" \
+            --course-url "${{ github.event.inputs.course_url }}"
+
+      - name: Push to Google Sheet
+        env:
+          GAS_WEBAPP_URL: ${{ secrets.GAS_WEBAPP_URL }}
+          GAS_API_TOKEN: ${{ secrets.GAS_API_TOKEN }}
+        run: |
+          python scripts/push_to_sheet.py \
+            "${{ steps.run_task.outputs.csv_path }}" \
+            "${{ steps.run_task.outputs.sheet_name }}"
 
       - name: Upload output artifact
         if: always()

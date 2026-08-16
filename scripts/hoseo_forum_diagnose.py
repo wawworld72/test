@@ -96,6 +96,120 @@ def main():
     for a in forum_soup.select(".action-menu a, [data-toggle='dropdown'] ~ .dropdown-menu a, .moodle-actionmenu a"):
         print(f"    text={a.get_text(strip=True)!r} href={a.get('href')}")
 
+    export_link = None
+    for a in forum_soup.find_all("a", href=True):
+        if a.get_text(strip=True).lower() == "export" and "mod/forum/export.php" in a["href"]:
+            export_link = a["href"]
+            break
+
+    if not export_link:
+        print("\n[8] 'mod/forum/export.php' 링크를 찾지 못해 이후 단계를 건너뜁니다.")
+        return
+
+    print(f"\n[8] Export 링크 실제 접속: {export_link}")
+    export_resp = session.get(export_link)
+    export_resp.raise_for_status()
+    content_type = export_resp.headers.get("Content-Type", "")
+    print(f"    상태={export_resp.status_code}, Content-Type={content_type!r}, 길이={len(export_resp.text)}자")
+
+    if "csv" in content_type.lower() or "text/plain" in content_type.lower():
+        print("    바로 CSV/텍스트로 응답한 것으로 보입니다. 앞부분 500자:")
+        print(export_resp.text[:500])
+        return
+
+    export_soup = BeautifulSoup(export_resp.text, "html.parser")
+    print(f"    HTML 응답으로 보입니다 (title={export_soup.title.get_text() if export_soup.title else None}).")
+
+    forms = export_soup.find_all("form")
+    print(f"    [8-1] export 페이지 내 <form> 개수: {len(forms)}")
+    target_form = None
+    for form in forms:
+        print(f"        action={form.get('action')} method={form.get('method')}")
+        for field in form.find_all(["input", "select", "textarea"]):
+            print(
+                f"            <{field.name} name={field.get('name')!r} type={field.get('type')!r} "
+                f"value={field.get('value')!r}>"
+            )
+            if field.name == "select":
+                options = [(o.get("value"), o.get_text(strip=True)) for o in field.find_all("option")]
+                preview = options[:10]
+                more = f" (+{len(options) - 10}개 더)" if len(options) > 10 else ""
+                print(f"                options: {preview}{more}")
+        if any((f.get("name") or "") == "submitbutton" for f in form.find_all("input")):
+            target_form = form
+
+    if target_form is None:
+        print("    submitbutton이 있는 폼을 찾지 못해 제출 시도를 건너뜁니다.")
+    else:
+        action = target_form.get("action") or export_link
+        payload = {}
+        for field in target_form.find_all("input"):
+            name = field.get("name")
+            if not name:
+                continue
+            if field.get("type") in ("checkbox", "submit"):
+                continue  # 체크박스는 기본값(해제) 유지, submit 버튼들은 아래서 하나만 지정
+            payload[name] = field.get("value", "")
+        for select in target_form.find_all("select"):
+            name = select.get("name")
+            if not name:
+                continue
+            options = select.find_all("option")
+            if name in ("discussionids[]", "useridsselected[]"):
+                # '전체'를 의미하는 것으로 보이는 옵션(예: 값이 비어있거나 'all')을 우선 선택
+                allopt = next((o for o in options if (o.get("value") or "") in ("", "0", "all")), None)
+                payload[name] = (allopt or options[0]).get("value", "") if options else ""
+            else:
+                selected = next((o for o in options if o.get("selected") is not None), None)
+                payload[name] = (selected or options[0]).get("value", "") if options else ""
+        payload["submitbutton"] = "Export"
+
+        print(f"\n    [8-2] 폼 제출 시도: action={action} payload={payload}")
+        submit_resp = session.post(action, data=payload)
+        submit_ct = submit_resp.headers.get("Content-Type", "")
+        print(
+            f"    응답: 상태={submit_resp.status_code}, url={submit_resp.url}, "
+            f"Content-Type={submit_ct!r}, 길이={len(submit_resp.content)}바이트"
+        )
+        if "csv" in submit_ct.lower() or "text/plain" in submit_ct.lower() or "octet-stream" in submit_ct.lower():
+            print("    파일로 직접 응답한 것으로 보입니다. 앞부분 500자:")
+            print(submit_resp.text[:500])
+        else:
+            print("    HTML로 응답한 것으로 보입니다 (다음 단계 화면일 수 있음). 앞부분 1500자:")
+            print(submit_resp.text[:1500])
+
+    print("\n[9] 나머지 14개 포럼에서도 'Export' 링크가 동일한 패턴으로 나오는지 확인:")
+    for f in forum_links[1:]:
+        r = session.get(f["href"])
+        r.raise_for_status()
+        s = BeautifulSoup(r.text, "html.parser")
+        link = next(
+            (a["href"] for a in s.find_all("a", href=True) if a.get_text(strip=True).lower() == "export"),
+            None,
+        )
+        print(f"    section={f['section']!r} text={f['text']!r} export_href={link}")
+
+    print("\n[10] 각 포럼 링크를 감싸는 활동(li.activity) 요소의 class/뱃지 텍스트로 '학생에게 비공개' 상태 마커 확인:")
+    for sec in sections:
+        heading = sec.select_one(".sectionname") or sec.select_one("h3")
+        heading_text = heading.get_text(strip=True) if heading else None
+        for a in sec.select('a[href*="mod/forum/view.php"]'):
+            activity_li = a.find_parent("li", class_=lambda c: c and "activity" in c)
+            container = activity_li or a.find_parent(["li", "div"])
+            classes = container.get("class") if container else None
+            badge_texts = [
+                b.get_text(strip=True)
+                for b in (container.select(".badge, .dimmed_text, .availabilityinfo, .statusspan") if container else [])
+            ]
+            print(
+                f"    section={heading_text!r} text={a.get_text(strip=True)!r}\n"
+                f"        container_tag={container.name if container else None} classes={classes}\n"
+                f"        badge_texts={badge_texts}"
+            )
+            if container:
+                snippet = str(container)
+                print(f"        outer_html(첫 600자)={snippet[:600]!r}")
+
 
 if __name__ == "__main__":
     main()
