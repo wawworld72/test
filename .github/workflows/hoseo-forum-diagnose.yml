@@ -1,0 +1,31 @@
+name: Hoseo Forum Diagnose
+
+# 과목 페이지의 주차별 토론방(포럼) 목록과 Export 기능의 실제 동작 방식을
+# 확인하기 위한 일회성 진단 워크플로. 실제 스크래핑/병합을 수행하지 않는다.
+on:
+  workflow_dispatch:
+    inputs:
+      course_url:
+        description: '과목 페이지 URL (예: https://learn.hoseo.ac.kr/course/view.php?id=40069)'
+        required: false
+        default: ''
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run forum diagnose
+        env:
+          HOSEO_USERNAME: ${{ secrets.HOSEO_USERNAME }}
+          HOSEO_PASSWORD: ${{ secrets.HOSEO_PASSWORD }}
+          HOSEO_COURSE_URL: ${{ github.event.inputs.course_url }}
+        run: python scripts/hoseo_forum_diagnose.py
