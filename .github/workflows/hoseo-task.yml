@@ -1,0 +1,50 @@
+name: Hoseo Task (HTTP)
+
+# HTTP 기반(requests) 버전 - 브라우저 설치가 필요 없어 훨씬 가볍다.
+# network_diagnose_lib.py로 로그인이 평문 폼+세션 쿠키, 출석부 조회가 서버
+# 렌더링 HTML임을 확인한 뒤 Playwright(hoseo_attendance_scraper.py)에서
+# 이쪽으로 옮기는 중.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: '실행할 요청 종류'
+        required: true
+        default: 'attendance'
+        type: choice
+        options:
+          - attendance
+      report_url:
+        description: '리포트 URL (task=attendance일 때만 사용, 비우면 기본값)'
+        required: false
+        default: ''
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run task
+        env:
+          HOSEO_USERNAME: ${{ secrets.HOSEO_USERNAME }}
+          HOSEO_PASSWORD: ${{ secrets.HOSEO_PASSWORD }}
+        run: |
+          python scripts/run_hoseo_task.py \
+            --task "${{ github.event.inputs.task }}" \
+            --report-url "${{ github.event.inputs.report_url }}"
+
+      - name: Upload output artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoseo-task-output
+          path: attendance_output/
+          retention-days: 14
