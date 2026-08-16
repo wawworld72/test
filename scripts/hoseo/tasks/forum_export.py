@@ -13,6 +13,10 @@ hoseo_forum_diagnose.py로 실제 사이트에서 확인한 동작:
        discussionids[]/useridsselected[]에 있는 모든 옵션을 선택하고
        format=csv로 POST하면 바로 text/csv 응답이 온다 - Moodle 포트폴리오의
        다단계 확인 절차 없이 한 번의 요청으로 끝난다.
+    4) 토론방이 현재 "학생에게 비공개" 상태(교수만 보이는 숨김 상태)일 때만
+       export한다. 과목 페이지에서 해당 활동의 li.activity 안에
+       <div class="availabilityinfo ishidden">에 "학생에게 비공개" 뱃지가
+       있는지로 판별한다 - 아직 학생에게 공개된(진행 중인) 토론방은 건너뛴다.
 """
 
 import csv
@@ -27,6 +31,13 @@ DEFAULT_COURSE_URL = "https://learn.hoseo.ac.kr/course/view.php?id=40069"
 WEEK_RE = re.compile(r"(\d+)\s*주\s*차")
 
 
+def _is_hidden_from_students(activity_li):
+    if activity_li is None:
+        return False
+    badge = activity_li.select_one(".availabilityinfo.ishidden")
+    return bool(badge and "비공개" in badge.get_text())
+
+
 def list_weekly_forums(session, course_url):
     resp = session.get(course_url)
     resp.raise_for_status()
@@ -39,12 +50,14 @@ def list_weekly_forums(session, course_url):
         m = WEEK_RE.search(heading_text)
         week_no = int(m.group(1)) if m else None
         for a in sec.select('a[href*="mod/forum/view.php"]'):
+            activity_li = a.find_parent("li", class_=lambda c: c and "activity" in c)
             forums.append(
                 {
                     "week": week_no,
                     "section": heading_text,
                     "title": a.get_text(strip=True),
                     "view_url": a.get("href"),
+                    "hidden_from_students": _is_hidden_from_students(activity_li),
                 }
             )
     return forums
@@ -117,6 +130,10 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     created_idx = None
 
     for f in forums:
+        if not f["hidden_from_students"]:
+            per_forum.append({**f, "row_count": 0, "note": "학생에게 공개 상태라 건너뜀"})
+            continue
+
         export_url = find_export_url(session, f["view_url"])
         if not export_url:
             per_forum.append({**f, "row_count": 0, "note": "Export 링크 없음"})
