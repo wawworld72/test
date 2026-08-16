@@ -179,3 +179,98 @@ function dispatchWorkflow(workflowFile, inputs) {
     ui.alert('요청 중 오류: ' + err.message);
   }
 }
+
+var HOSEO_TASK_WORKFLOW = 'hoseo-task.yml';
+
+/**
+ * 특정 출결 URL을 넘겨 hoseo-task.yml(HTTP 기반 스크래퍼)을 실행시키고, 완료될
+ * 때까지 기다렸다가 결과를 실행 로그(보기 > 실행 기록)에 출력한다. Apps Script
+ * 편집기에서 이 함수를 직접 실행해 확인하는 용도 - 시트/메뉴와는 무관하다.
+ */
+function fetchAttendanceAndLog(reportUrl) {
+  var token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+  var ref = PropertiesService.getScriptProperties().getProperty('GITHUB_REF') || 'main';
+  if (!token) {
+    Logger.log('GITHUB_TOKEN 스크립트 속성이 설정되어 있지 않습니다.');
+    return;
+  }
+
+  var dispatchedAt = new Date();
+  var request = buildDispatchRequest(
+    GITHUB_OWNER, GITHUB_REPO, HOSEO_TASK_WORKFLOW, ref,
+    { task: 'attendance', report_url: reportUrl }, token
+  );
+  var dispatchResponse = UrlFetchApp.fetch(request.url, request.options);
+  if (dispatchResponse.getResponseCode() !== 204) {
+    Logger.log('실행 요청 실패: ' + dispatchResponse.getContentText());
+    return;
+  }
+
+  var runId = waitForRunId(dispatchedAt, token);
+  if (!runId) {
+    Logger.log('실행된 워크플로를 찾지 못했습니다 (시간 초과).');
+    return;
+  }
+
+  var conclusion = waitForRunConclusion(runId, token);
+  Logger.log('워크플로 실행 결과: ' + conclusion);
+
+  var logText = fetchJobLogText(runId, token);
+  Logger.log(extractAttendanceSection(logText));
+}
+
+/** workflow_dispatch 응답에는 run_id가 없어서, 방금 시작한 것보다 최신인 run이
+ * 나타날 때까지 목록을 다시 조회한다. */
+function waitForRunId(dispatchedAt, token) {
+  var url = 'https://api.github.com/repos/' + GITHUB_OWNER + '/' + GITHUB_REPO +
+    '/actions/workflows/' + HOSEO_TASK_WORKFLOW + '/runs?per_page=5';
+  for (var i = 0; i < 10; i++) {
+    Utilities.sleep(3000);
+    var response = UrlFetchApp.fetch(url, { headers: authHeaders(token), muteHttpExceptions: true });
+    var runs = JSON.parse(response.getContentText()).workflow_runs || [];
+    for (var j = 0; j < runs.length; j++) {
+      if (new Date(runs[j].created_at) >= dispatchedAt) return runs[j].id;
+    }
+  }
+  return null;
+}
+
+function waitForRunConclusion(runId, token) {
+  var url = 'https://api.github.com/repos/' + GITHUB_OWNER + '/' + GITHUB_REPO + '/actions/runs/' + runId;
+  for (var i = 0; i < 20; i++) {
+    var response = UrlFetchApp.fetch(url, { headers: authHeaders(token), muteHttpExceptions: true });
+    var run = JSON.parse(response.getContentText());
+    if (run.status === 'completed') return run.conclusion;
+    Utilities.sleep(3000);
+  }
+  return 'timeout';
+}
+
+function fetchJobLogText(runId, token) {
+  var jobsUrl = 'https://api.github.com/repos/' + GITHUB_OWNER + '/' + GITHUB_REPO +
+    '/actions/runs/' + runId + '/jobs';
+  var jobsResponse = UrlFetchApp.fetch(jobsUrl, { headers: authHeaders(token), muteHttpExceptions: true });
+  var jobId = JSON.parse(jobsResponse.getContentText()).jobs[0].id;
+
+  var logsUrl = 'https://api.github.com/repos/' + GITHUB_OWNER + '/' + GITHUB_REPO +
+    '/actions/jobs/' + jobId + '/logs';
+  // GitHub는 실제 로그를 서명된 blob storage URL로 302 리다이렉트한다. 리다이렉트를
+  // 자동으로 따라가면서 Authorization 헤더를 그대로 넘기면 서명된 URL 쪽에서 거부할
+  // 수 있어(이 프로젝트 CLAUDE.md에도 적어둔 것과 같은 종류의 문제), 직접 처리한다.
+  var first = UrlFetchApp.fetch(logsUrl, {
+    headers: authHeaders(token),
+    muteHttpExceptions: true,
+    followRedirects: false
+  });
+  var location = first.getHeaders()['Location'] || first.getHeaders()['location'];
+  if (!location) return first.getContentText();
+  return UrlFetchApp.fetch(location, { muteHttpExceptions: true }).getContentText();
+}
+
+/**
+ * Apps Script 편집기에서 바로 실행해 fetchAttendanceAndLog()를 시험해보는 용도.
+ * 실행 후 '실행 기록'(또는 Ctrl+Enter 로그 패널)에서 결과를 확인한다.
+ */
+function testFetchAttendance() {
+  fetchAttendanceAndLog('https://learn.hoseo.ac.kr/local/ubonattend/report.php?id=43780');
+}
