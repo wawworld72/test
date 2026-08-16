@@ -1,0 +1,33 @@
+name: Deploy Assignment Automation (Apps Script)
+
+on:
+  push:
+    branches: [main]
+    paths: ['assignment-automation/**']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run tests before deploying
+        run: node test/run.js
+        working-directory: assignment-automation
+
+      - name: Install clasp
+        run: npm install -g @google/clasp
+
+      - name: Write clasp credentials
+        run: printf '%s' "$CLASP_CREDENTIALS" > ~/.clasprc.json
+        env:
+          CLASP_CREDENTIALS: ${{ secrets.CLASP_CREDENTIALS }}
+
+      - name: Push to Apps Script
+        run: clasp push --force
+        working-directory: assignment-automation

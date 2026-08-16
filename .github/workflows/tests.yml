@@ -20,6 +20,10 @@ jobs:
       - name: Run JS tests (gas/attendanceCore.js)
         run: npm test
 
+      - name: Run assignment-automation pure logic tests
+        run: node test/run.js
+        working-directory: assignment-automation
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
