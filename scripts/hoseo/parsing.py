@@ -19,6 +19,10 @@ SORT_LINK_RE = re.compile(r"\s*정렬\s+\S+\s+(오름차순|내림차순)\s*")
 
 SHOW_ALL_LABELS = ("모두", "전체", "All", "전체보기", "전체 보기")
 
+COURSE_ID_RE = re.compile(r"[?&]id=(\d+)")
+MY_STATUS_USERID_RE = re.compile(r"[?&]userid=(\d+)")
+STUDENT_ID_RE = re.compile(r"^\d{5,10}$")
+
 
 def _cell_text(cell) -> str:
     return " ".join(cell.get_text().split())
@@ -257,3 +261,88 @@ def find_show_all_submission(html: str, base_url: str):
         return method, action, payload
 
     return None
+
+
+def report_url_from_course_url(course_url: str):
+    """course/view.php?id=N의 id가 local/ubonattend/report.php?id=N과 같은 과목 id임을
+    실사이트로 확인했으므로, 과목 링크 하나로 출결 리포트 URL을 스스로 만든다."""
+    m = COURSE_ID_RE.search(course_url)
+    if not m:
+        return None
+    return f"https://learn.hoseo.ac.kr/local/ubonattend/report.php?id={m.group(1)}"
+
+
+def fetch_full_report_html(session, report_url: str):
+    """report_url을 GET하고, '모두 보기' 컨트롤이 있으면 재요청해 페이지네이션 없는
+    전체 버전을 받는다 - 재요청 후 학생 수가 줄거나 표를 못 찾으면 원본을 그대로 쓴다.
+
+    (html, parse_report_table 결과, 로그용 info)를 함께 반환한다 - 호출하는 쪽이
+    재파싱 없이 그대로 쓰거나(attendance.py), html만 다시 파싱해도 된다(forum_export.py의
+    학번 매핑처럼 parse_report_table과 다른 방식으로 같은 페이지를 봐야 할 때).
+    """
+    resp = session.get(report_url)
+    resp.raise_for_status()
+    before_html = resp.text
+    before_result = parse_report_table(before_html)
+    before_count = before_result["student_count"] if before_result else 0
+
+    show_all = find_show_all_submission(before_html, resp.url)
+    info = {
+        "show_all_found": show_all is not None,
+        "method": None,
+        "action": None,
+        "payload": None,
+        "before_count": before_count,
+        "after_count": None,
+        "used_after": False,
+    }
+    if show_all is None:
+        return before_html, before_result, info
+
+    method, action, payload = show_all
+    info.update(method=method, action=action, payload=payload)
+
+    if method == "post":
+        resp2 = session.post(action, data=payload)
+    else:
+        resp2 = session.get(action, params=payload)
+    resp2.raise_for_status()
+
+    after_html = resp2.text
+    after_result = parse_report_table(after_html)
+    after_count = after_result["student_count"] if after_result else 0
+    info["after_count"] = after_count
+
+    if after_result is None or after_count < before_count:
+        return before_html, before_result, info
+
+    info["used_after"] = True
+    return after_html, after_result, info
+
+
+def build_userid_studentid_map(html: str):
+    """local/ubonattend/report.php 페이지에서 my_status.php 링크가 있는 행마다, 그 행의
+    셀 중 5~10자리 숫자만 있는 셀을 학번으로 보고 {userid: studentId} 매핑을 만든다."""
+    soup = BeautifulSoup(html, "html.parser")
+    mapping = {}
+
+    for row in soup.find_all("tr"):
+        link = row.find("a", href=lambda h: h and "my_status.php" in h)
+        if link is None:
+            continue
+
+        m = MY_STATUS_USERID_RE.search(link["href"])
+        if not m:
+            continue
+        userid = m.group(1)
+
+        student_id = ""
+        for cell in row.find_all(["td", "th"]):
+            text = cell.get_text(strip=True)
+            if STUDENT_ID_RE.match(text):
+                student_id = text
+                break
+
+        mapping[userid] = student_id
+
+    return mapping

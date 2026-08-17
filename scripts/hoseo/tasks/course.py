@@ -9,23 +9,14 @@ course/view.php?id=N 링크를 따로 넘겨야 했다. 실제 사이트에서 �
 attendance.fetch와 forum_export.fetch를 둘 다 호출한다.
 """
 
-import re
-
+from .. import parsing
 from . import attendance, forum_export
 
 DEFAULT_COURSE_URL = forum_export.DEFAULT_COURSE_URL
-COURSE_ID_RE = re.compile(r"[?&]id=(\d+)")
-
-
-def _report_url_from_course_url(course_url):
-    m = COURSE_ID_RE.search(course_url)
-    if not m:
-        return None
-    return f"https://learn.hoseo.ac.kr/local/ubonattend/report.php?id={m.group(1)}"
 
 
 def fetch(session, course_url=DEFAULT_COURSE_URL):
-    report_url = _report_url_from_course_url(course_url)
+    report_url = parsing.report_url_from_course_url(course_url)
     if report_url is None:
         print(f"[course] course_url에서 id를 못 찾았습니다: {course_url}")
 

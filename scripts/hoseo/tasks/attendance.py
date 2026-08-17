@@ -17,36 +17,23 @@ SHEET_NAME = "Hoseo"
 
 
 def fetch(session, report_url: str = DEFAULT_URL):
-    resp = session.get(report_url)
-    resp.raise_for_status()
-    html = resp.text
+    _, result, info = parsing.fetch_full_report_html(session, report_url)
 
-    before_result = parsing.parse_report_table(html)
-    before_count = before_result["student_count"] if before_result else 0
-
-    show_all = parsing.find_show_all_submission(html, resp.url)
-    if show_all is None:
+    if not info["show_all_found"]:
         print("[attendance] '모두 보기' 컨트롤을 찾지 못했습니다 - 기본 페이지 그대로 사용합니다.")
-        print(f"[attendance] 기본 페이지 학생 수: {before_count}")
-        return before_result
+        print(f"[attendance] 기본 페이지 학생 수: {info['before_count']}")
+        return result
 
-    method, action, payload = show_all
-    print(f"[attendance] '모두 보기' 컨트롤 발견 ({method.upper()} {action}, payload={payload}) - 재요청합니다.")
-    if method == "post":
-        resp2 = session.post(action, data=payload)
-    else:
-        resp2 = session.get(action, params=payload)
-    resp2.raise_for_status()
+    print(
+        f"[attendance] '모두 보기' 컨트롤 발견 "
+        f"({info['method'].upper()} {info['action']}, payload={info['payload']}) - 재요청합니다."
+    )
+    print(f"[attendance] 재요청 전 학생 수: {info['before_count']}, 재요청 후 학생 수: {info['after_count']}")
 
-    after_result = parsing.parse_report_table(resp2.text)
-    after_count = after_result["student_count"] if after_result else 0
-    print(f"[attendance] 재요청 전 학생 수: {before_count}, 재요청 후 학생 수: {after_count}")
-
-    if after_result is None or after_count < before_count:
+    if not info["used_after"]:
         print("[attendance] 재요청 후 학생 수가 줄어들거나 표를 못 찾아 기본 페이지 결과를 사용합니다.")
-        return before_result
 
-    return after_result
+    return result
 
 
 def write_csv(result, out_dir):

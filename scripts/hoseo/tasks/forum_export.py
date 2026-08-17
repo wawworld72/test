@@ -17,6 +17,12 @@ hoseo_forum_diagnose.py로 실제 사이트에서 확인한 동작:
        export한다. 과목 페이지에서 해당 활동의 li.activity 안에
        <div class="availabilityinfo ishidden">에 "학생에게 비공개" 뱃지가
        있는지로 판별한다 - 아직 학생에게 공개된(진행 중인) 토론방은 건너뛴다.
+
+export.php CSV에는 Moodle 내부 숫자 userid는 있지만 학번은 없다. course_url에서
+과목 id를 뽑아 local/ubonattend/report.php의 학생 목록 페이지를 조회하고,
+my_status.php 링크가 있는 행마다 그 행의 5~10자리 숫자 셀을 학번으로 보는
+{userid: 학번} 매핑(parsing.build_userid_studentid_map)을 만들어 userid 바로
+뒤에 학번 열을 끼워 넣는다. 매핑에 없는 userid(교수/조교 계정 등)는 빈 문자열.
 """
 
 import csv
@@ -126,10 +132,22 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     if not forums:
         return None
 
+    report_url = parsing.report_url_from_course_url(course_url)
+    userid_map = {}
+    if report_url is None:
+        print(f"[forum_export] course_url에서 id를 못 찾아 학번 매핑을 건너뜁니다: {course_url}")
+    else:
+        report_html, _, report_info = parsing.fetch_full_report_html(session, report_url)
+        userid_map = parsing.build_userid_studentid_map(report_html)
+        print(
+            f"[forum_export] 학번-userid 매핑 {len(userid_map)}건 확보 "
+            f"(report student_count={report_info['before_count']}/{report_info['after_count']})"
+        )
+
     fields = None
+    userid_idx = None
     merged_rows = []
     per_forum = []
-    created_idx = None
 
     for f in forums:
         if not f["hidden_from_students"]:
@@ -145,21 +163,29 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
         row_fields, rows = parse_csv_bytes(csv_bytes)
         if fields is None and row_fields:
             fields = row_fields
-            if "created" in fields:
-                created_idx = fields.index("created")
+            userid_idx = fields.index("userid") if "userid" in fields else None
 
         week_label = f"{f['week']}주차" if f["week"] is not None else "미분류"
         for row in rows:
+            if userid_idx is not None:
+                uid = row[userid_idx] if userid_idx < len(row) else ""
+                student_id = userid_map.get(uid, "")
+                row = row[:userid_idx + 1] + [student_id] + row[userid_idx + 1:]
             merged_rows.append([week_label, f["title"]] + row)
         per_forum.append({**f, "row_count": len(rows), "note": None})
 
+    header_fields = list(fields or [])
+    if userid_idx is not None:
+        header_fields.insert(userid_idx + 1, "학번")
+    header = ["주차", "토론방"] + header_fields
+
+    created_col = header.index("created") if "created" in header else None
+
     def sort_key(row):
         week_no = next((f["week"] for f in forums if f"{f['week']}주차" == row[0]), 99) or 99
-        if created_idx is not None:
-            created_col = 2 + created_idx
-            value = row[created_col] if created_col < len(row) else ""
+        if created_col is not None and created_col < len(row):
             try:
-                return (week_no, int(value))
+                return (week_no, int(row[created_col]))
             except (TypeError, ValueError):
                 return (week_no, 0)
         return (week_no, 0)
@@ -167,7 +193,7 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     merged_rows.sort(key=sort_key)
 
     return {
-        "header": ["주차", "토론방"] + (fields or []),
+        "header": header,
         "rows": merged_rows,
         "per_forum": per_forum,
     }
