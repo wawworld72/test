@@ -1,8 +1,12 @@
 """
 호서대 LMS 주차별 출석 현황 조회 - 요청별(task) 처리 모듈, HTTP 기반.
 
-session.py(공유 로그인 세션)와 parsing.py(공유 표 파싱)만 사용하고, 이 URL과
-'모두 보기' 재요청은 이 모듈만 안다. 새 요청을 추가할 때 참고할 샘플이기도 하다.
+session.py(공유 로그인 세션)와 parsing.py(공유 표 파싱)만 사용하고, 이 URL은 이 모듈만
+안다. 새 요청을 추가할 때 참고할 샘플이기도 하다.
+
+report.php의 '모두 보기' select만으로는 대형 강좌의 전체 인원이 다 안 나오는 걸 실사이트로
+확인했다(forum_export의 학번 매핑에서 겪은 문제와 동일) - listsize/page 쿼리 파라미터로
+직접 페이지를 순회하는 parsing.fetch_full_attendance_report를 쓴다.
 
 Playwright 버전(hoseo_attendance_scraper.py)을 대체한다 - network_diagnose_lib.py로
 실제 로그인/조회 요청을 캡처해서 평문 폼 로그인 + 서버 렌더링 HTML임을 확인했다.
@@ -17,22 +21,12 @@ SHEET_NAME = "Hoseo"
 
 
 def fetch(session, report_url: str = DEFAULT_URL):
-    _, result, info = parsing.fetch_full_report_html(session, report_url)
+    result = parsing.fetch_full_attendance_report(session, report_url)
+    if result is None:
+        print("[attendance] 리포트 표를 찾지 못했습니다.")
+        return None
 
-    if not info["show_all_found"]:
-        print("[attendance] '모두 보기' 컨트롤을 찾지 못했습니다 - 기본 페이지 그대로 사용합니다.")
-        print(f"[attendance] 기본 페이지 학생 수: {info['before_count']}")
-        return result
-
-    print(
-        f"[attendance] '모두 보기' 컨트롤 발견 "
-        f"({info['method'].upper()} {info['action']}, payload={info['payload']}) - 재요청합니다."
-    )
-    print(f"[attendance] 재요청 전 학생 수: {info['before_count']}, 재요청 후 학생 수: {info['after_count']}")
-
-    if not info["used_after"]:
-        print("[attendance] 재요청 후 학생 수가 줄어들거나 표를 못 찾아 기본 페이지 결과를 사용합니다.")
-
+    print(f"[attendance] 페이지 순회로 확보한 학생 수: {result['student_count']}")
     return result
 
 

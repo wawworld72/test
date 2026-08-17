@@ -10,14 +10,11 @@ rowSpan/colSpan을 펼치던 방식)을 정적 HTML(BeautifulSoup)에서도 동�
 import csv
 import re
 from pathlib import Path
-from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
 WEEK_RE = re.compile(r"(\d+)\s*주(?:차)?")
 SORT_LINK_RE = re.compile(r"\s*정렬\s+\S+\s+(오름차순|내림차순)\s*")
-
-SHOW_ALL_LABELS = ("모두", "전체", "All", "전체보기", "전체 보기")
 
 COURSE_ID_RE = re.compile(r"[?&]id=(\d+)")
 MY_STATUS_USERID_RE = re.compile(r"[?&]userid=(\d+)")
@@ -213,56 +210,6 @@ def write_long_csv(long_rows, meta_labels, out_path: Path) -> None:
         writer.writerows(long_rows)
 
 
-def find_show_all_submission(html: str, base_url: str):
-    """'목록수' 등 페이지당 표시 개수 컨트롤에서 '모두'류 옵션을 찾아, 그 값으로
-    다시 요청을 보내는 데 필요한 (method, action_url, payload)를 반환한다.
-    찾지 못하면 None.
-
-    attendance_lib.select_show_all()의 HTTP 버전 - 라이브 페이지에서 <select>를
-    클릭하는 대신, 정적 HTML에서 그 <select>를 감싸는 <form>을 찾아 안의 다른
-    필드값을 그대로 유지하면서 '모두' 옵션 값만 바꿔 요청을 재구성한다.
-    """
-    soup = BeautifulSoup(html, "html.parser")
-
-    for select in soup.find_all("select"):
-        name = select.get("name")
-        if not name:
-            continue
-
-        target_value = None
-        for option in select.find_all("option"):
-            text = option.get_text().strip()
-            if text in SHOW_ALL_LABELS:
-                target_value = option.get("value", text)
-                break
-        if target_value is None:
-            continue
-
-        form = select.find_parent("form")
-        if form is None:
-            continue
-
-        method = (form.get("method") or "get").lower()
-        action = urljoin(base_url, form.get("action") or base_url)
-
-        payload = {}
-        for inp in form.find_all("input"):
-            field_name = inp.get("name")
-            if field_name and field_name != name:
-                payload[field_name] = inp.get("value", "")
-        for other_select in form.find_all("select"):
-            field_name = other_select.get("name")
-            if not field_name or field_name == name:
-                continue
-            chosen = other_select.find("option", selected=True) or other_select.find("option")
-            payload[field_name] = chosen.get("value", "") if chosen else ""
-
-        payload[name] = target_value
-        return method, action, payload
-
-    return None
-
-
 def report_url_from_course_url(course_url: str):
     """course/view.php?id=N의 id가 local/ubonattend/report.php?id=N과 같은 과목 id임을
     실사이트로 확인했으므로, 과목 링크 하나로 출결 리포트 URL을 스스로 만든다."""
@@ -272,52 +219,55 @@ def report_url_from_course_url(course_url: str):
     return f"https://learn.hoseo.ac.kr/local/ubonattend/report.php?id={m.group(1)}"
 
 
-def fetch_full_report_html(session, report_url: str):
-    """report_url을 GET하고, '모두 보기' 컨트롤이 있으면 재요청해 페이지네이션 없는
-    전체 버전을 받는다 - 재요청 후 학생 수가 줄거나 표를 못 찾으면 원본을 그대로 쓴다.
+def fetch_full_attendance_report(session, report_url: str, max_pages: int = 20, page_size: int = 100):
+    """report.php의 '모두 보기' select만으로는 대형 강좌의 전체 인원이 다 안 나오는 걸
+    확인했으므로(fetch_full_userid_studentid_map과 동일한 문제), listsize/page로 직접
+    페이지를 순회하며 parse_report_table 결과를 병합한다. 표를 못 찾거나 첫 페이지부터
+    학생 데이터가 없으면 None(parse_report_table의 '표 없음' 규약과 동일).
 
-    (html, parse_report_table 결과, 로그용 info)를 함께 반환한다 - 호출하는 쪽이
-    재파싱 없이 그대로 쓰거나(attendance.py), html만 다시 파싱해도 된다(forum_export.py의
-    학번 매핑처럼 parse_report_table과 다른 방식으로 같은 페이지를 봐야 할 때).
+    dedup은 (메타값 튜플, 주차, 항목순번) 단위로 한다 - student_count만 distinct로
+    세고 long_rows는 그대로 이어붙이면, 페이지 경계에 같은 학생이 걸쳐 나올 때 그
+    학생의 행이 CSV/시트에 중복으로 쌓이는 걸 못 잡아낸다.
     """
-    resp = session.get(report_url)
-    resp.raise_for_status()
-    before_html = resp.text
-    before_result = parse_report_table(before_html)
-    before_count = before_result["student_count"] if before_result else 0
+    sep = "&" if "?" in report_url else "?"
+    merged_long_rows = []
+    seen_row_keys = set()
+    seen_students = set()
+    meta_labels = weeks = items_per_week = None
 
-    show_all = find_show_all_submission(before_html, resp.url)
-    info = {
-        "show_all_found": show_all is not None,
-        "method": None,
-        "action": None,
-        "payload": None,
-        "before_count": before_count,
-        "after_count": None,
-        "used_after": False,
+    for page in range(max_pages):
+        url = f"{report_url}{sep}listsize={page_size}&page={page}"
+        resp = session.get(url)
+        resp.raise_for_status()
+
+        page_result = parse_report_table(resp.text)
+        if page_result is None or not page_result["long_rows"]:
+            break
+
+        if meta_labels is None:
+            meta_labels = page_result["meta_labels"]
+            weeks = page_result["weeks"]
+            items_per_week = page_result["items_per_week"]
+
+        for row in page_result["long_rows"]:
+            meta_key = tuple(row.get(label, "") for label in meta_labels)
+            row_key = (meta_key, row["주차"], row["항목순번"])
+            if row_key in seen_row_keys:
+                continue
+            seen_row_keys.add(row_key)
+            seen_students.add(meta_key)
+            merged_long_rows.append(row)
+
+    if meta_labels is None:
+        return None
+
+    return {
+        "long_rows": merged_long_rows,
+        "meta_labels": meta_labels,
+        "student_count": len(seen_students),
+        "weeks": weeks,
+        "items_per_week": items_per_week,
     }
-    if show_all is None:
-        return before_html, before_result, info
-
-    method, action, payload = show_all
-    info.update(method=method, action=action, payload=payload)
-
-    if method == "post":
-        resp2 = session.post(action, data=payload)
-    else:
-        resp2 = session.get(action, params=payload)
-    resp2.raise_for_status()
-
-    after_html = resp2.text
-    after_result = parse_report_table(after_html)
-    after_count = after_result["student_count"] if after_result else 0
-    info["after_count"] = after_count
-
-    if after_result is None or after_count < before_count:
-        return before_html, before_result, info
-
-    info["used_after"] = True
-    return after_html, after_result, info
 
 
 def build_userid_studentid_map(html: str):
