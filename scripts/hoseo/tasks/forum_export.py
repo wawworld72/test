@@ -28,6 +28,11 @@ my_status.php 링크가 있는 행마다 그 행의 5~10자리 숫자 셀을 학
 전체 인원이 다 안 나온다(예: 실제 46명 중 15명만) - listsize/page 쿼리 파라미터로
 직접 페이지를 순회해야 전체가 나온다(parsing.fetch_full_userid_studentid_map,
 참고 스크립트 moodle_forum_crawler.js의 buildUseridMap과 동일한 방식).
+
+각 행 맨 끝에는 그 게시글로 바로 이동하는 "링크" 열을 추가한다 - export.php CSV의
+discussion(토론 id)/id(게시글 id) 컬럼으로 mod/forum/discuss.php?d=<토론id>#p<게시글id>를
+그대로 조립한다(discuss.php는 참고 스크립트도 게시글을 긁을 때 쓴, 이미 검증된 경로이고
+#p<id> 앵커는 Moodle 코어가 모든 테마에서 공통으로 붙이는 표준 게시글 id).
 """
 
 import csv
@@ -148,6 +153,8 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     fields = None
     userid_idx = None
     userfullname_idx = None
+    id_idx = None
+    discussion_idx = None
     merged_rows = []
     per_forum = []
     seen_uids = set()
@@ -169,9 +176,21 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
             fields = row_fields
             userid_idx = fields.index("userid") if "userid" in fields else None
             userfullname_idx = fields.index("userfullname") if "userfullname" in fields else None
+            id_idx = fields.index("id") if "id" in fields else None
+            discussion_idx = fields.index("discussion") if "discussion" in fields else None
 
         week_label = f"{f['week']}주차" if f["week"] is not None else "미분류"
         for row in rows:
+            if id_idx is not None and discussion_idx is not None:
+                post_id = row[id_idx] if id_idx < len(row) else ""
+                discussion_id = row[discussion_idx] if discussion_idx < len(row) else ""
+                link = (
+                    f"https://learn.hoseo.ac.kr/mod/forum/discuss.php?d={discussion_id}#p{post_id}"
+                    if discussion_id and post_id else ""
+                )
+            else:
+                link = ""
+
             if userid_idx is not None:
                 uid = row[userid_idx] if userid_idx < len(row) else ""
                 seen_uids.add(uid)
@@ -179,7 +198,7 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
                     seen_uid_names[uid] = row[userfullname_idx] if userfullname_idx < len(row) else ""
                 student_id = userid_map.get(uid, "")
                 row = row[:userid_idx + 1] + [student_id] + row[userid_idx + 1:]
-            merged_rows.append([week_label, f["title"]] + row)
+            merged_rows.append([week_label, f["title"]] + row + [link])
         per_forum.append({**f, "row_count": len(rows), "note": None})
 
     if userid_idx is not None:
@@ -193,7 +212,7 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     header_fields = list(fields or [])
     if userid_idx is not None:
         header_fields.insert(userid_idx + 1, "학번")
-    header = ["주차", "토론방"] + header_fields
+    header = ["주차", "토론방"] + header_fields + ["링크"]
 
     created_col = header.index("created") if "created" in header else None
 
