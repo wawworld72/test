@@ -148,6 +148,7 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     userid_idx = None
     merged_rows = []
     per_forum = []
+    seen_uids = set()
 
     for f in forums:
         if not f["hidden_from_students"]:
@@ -169,10 +170,18 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
         for row in rows:
             if userid_idx is not None:
                 uid = row[userid_idx] if userid_idx < len(row) else ""
+                seen_uids.add(uid)
                 student_id = userid_map.get(uid, "")
                 row = row[:userid_idx + 1] + [student_id] + row[userid_idx + 1:]
             merged_rows.append([week_label, f["title"]] + row)
         per_forum.append({**f, "row_count": len(rows), "note": None})
+
+    if userid_idx is not None:
+        unmapped_uids = sorted(uid for uid in seen_uids if uid and uid not in userid_map)
+        print(
+            f"[forum_export] 게시글 작성자 고유 userid {len(seen_uids)}명 중 "
+            f"학번 매핑 안 된 userid {len(unmapped_uids)}명: {unmapped_uids}"
+        )
 
     header_fields = list(fields or [])
     if userid_idx is not None:
