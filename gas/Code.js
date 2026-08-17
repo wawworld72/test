@@ -131,6 +131,12 @@ function triggerHoseoWorkflow() {
   dispatchWorkflow('attendance-scrape.yml', {});
 }
 
+/**
+ * 교과목명만으로는 같은 과목에 분반이 여러 개일 때 어느 분반인지 정할 수 없다 -
+ * ibk_attendance_scraper.py도 이 경우 아무거나 하나를 조용히 고르지 않고 "분반을
+ * 지정해달라"며 실패하도록 짜여 있으므로, 여기서도 분반을 같이 물어봐서 넘긴다.
+ * 분반이 하나뿐인 과목이면 빈 값으로 둬도 그대로 동작한다.
+ */
 function triggerIbkWorkflow() {
   var ui = SpreadsheetApp.getUi();
   var courseResponse = ui.prompt('IBK 출결 갱신', '조회할 교과목명을 입력하세요 (필수)', ui.ButtonSet.OK_CANCEL);
@@ -142,7 +148,18 @@ function triggerIbkWorkflow() {
     ui.alert('교과목명을 입력해야 합니다.');
     return;
   }
-  dispatchWorkflow('ibk-attendance-scrape.yml', { course_name: courseName });
+
+  var sectionResponse = ui.prompt(
+    'IBK 출결 갱신',
+    '분반을 입력하세요 (같은 과목에 분반이 여러 개일 때만 필요 - 하나뿐이면 비워두세요)',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (sectionResponse.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+  var section = sectionResponse.getResponseText().trim();
+
+  dispatchWorkflow('ibk-attendance-scrape.yml', { course_name: courseName, section: section });
 }
 
 /**
