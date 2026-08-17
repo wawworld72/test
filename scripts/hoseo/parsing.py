@@ -10,14 +10,15 @@ rowSpan/colSpan을 펼치던 방식)을 정적 HTML(BeautifulSoup)에서도 동�
 import csv
 import re
 from pathlib import Path
-from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
 WEEK_RE = re.compile(r"(\d+)\s*주(?:차)?")
 SORT_LINK_RE = re.compile(r"\s*정렬\s+\S+\s+(오름차순|내림차순)\s*")
 
-SHOW_ALL_LABELS = ("모두", "전체", "All", "전체보기", "전체 보기")
+COURSE_ID_RE = re.compile(r"[?&]id=(\d+)")
+MY_STATUS_USERID_RE = re.compile(r"[?&]userid=(\d+)")
+STUDENT_ID_RE = re.compile(r"^\d{5,10}$")
 
 
 def _cell_text(cell) -> str:
@@ -209,51 +210,111 @@ def write_long_csv(long_rows, meta_labels, out_path: Path) -> None:
         writer.writerows(long_rows)
 
 
-def find_show_all_submission(html: str, base_url: str):
-    """'목록수' 등 페이지당 표시 개수 컨트롤에서 '모두'류 옵션을 찾아, 그 값으로
-    다시 요청을 보내는 데 필요한 (method, action_url, payload)를 반환한다.
-    찾지 못하면 None.
+def report_url_from_course_url(course_url: str):
+    """course/view.php?id=N의 id가 local/ubonattend/report.php?id=N과 같은 과목 id임을
+    실사이트로 확인했으므로, 과목 링크 하나로 출결 리포트 URL을 스스로 만든다."""
+    m = COURSE_ID_RE.search(course_url)
+    if not m:
+        return None
+    return f"https://learn.hoseo.ac.kr/local/ubonattend/report.php?id={m.group(1)}"
 
-    attendance_lib.select_show_all()의 HTTP 버전 - 라이브 페이지에서 <select>를
-    클릭하는 대신, 정적 HTML에서 그 <select>를 감싸는 <form>을 찾아 안의 다른
-    필드값을 그대로 유지하면서 '모두' 옵션 값만 바꿔 요청을 재구성한다.
+
+def fetch_full_attendance_report(session, report_url: str, max_pages: int = 20, page_size: int = 100):
+    """report.php의 '모두 보기' select만으로는 대형 강좌의 전체 인원이 다 안 나오는 걸
+    확인했으므로(fetch_full_userid_studentid_map과 동일한 문제), listsize/page로 직접
+    페이지를 순회하며 parse_report_table 결과를 병합한다. 표를 못 찾거나 첫 페이지부터
+    학생 데이터가 없으면 None(parse_report_table의 '표 없음' 규약과 동일).
+
+    dedup은 (메타값 튜플, 주차, 항목순번) 단위로 한다 - student_count만 distinct로
+    세고 long_rows는 그대로 이어붙이면, 페이지 경계에 같은 학생이 걸쳐 나올 때 그
+    학생의 행이 CSV/시트에 중복으로 쌓이는 걸 못 잡아낸다.
     """
-    soup = BeautifulSoup(html, "html.parser")
+    sep = "&" if "?" in report_url else "?"
+    merged_long_rows = []
+    seen_row_keys = set()
+    seen_students = set()
+    meta_labels = weeks = items_per_week = None
 
-    for select in soup.find_all("select"):
-        name = select.get("name")
-        if not name:
-            continue
+    for page in range(max_pages):
+        url = f"{report_url}{sep}listsize={page_size}&page={page}"
+        resp = session.get(url)
+        resp.raise_for_status()
 
-        target_value = None
-        for option in select.find_all("option"):
-            text = option.get_text().strip()
-            if text in SHOW_ALL_LABELS:
-                target_value = option.get("value", text)
-                break
-        if target_value is None:
-            continue
+        page_result = parse_report_table(resp.text)
+        if page_result is None or not page_result["long_rows"]:
+            break
 
-        form = select.find_parent("form")
-        if form is None:
-            continue
+        if meta_labels is None:
+            meta_labels = page_result["meta_labels"]
+            weeks = page_result["weeks"]
+            items_per_week = page_result["items_per_week"]
 
-        method = (form.get("method") or "get").lower()
-        action = urljoin(base_url, form.get("action") or base_url)
-
-        payload = {}
-        for inp in form.find_all("input"):
-            field_name = inp.get("name")
-            if field_name and field_name != name:
-                payload[field_name] = inp.get("value", "")
-        for other_select in form.find_all("select"):
-            field_name = other_select.get("name")
-            if not field_name or field_name == name:
+        for row in page_result["long_rows"]:
+            meta_key = tuple(row.get(label, "") for label in meta_labels)
+            row_key = (meta_key, row["주차"], row["항목순번"])
+            if row_key in seen_row_keys:
                 continue
-            chosen = other_select.find("option", selected=True) or other_select.find("option")
-            payload[field_name] = chosen.get("value", "") if chosen else ""
+            seen_row_keys.add(row_key)
+            seen_students.add(meta_key)
+            merged_long_rows.append(row)
 
-        payload[name] = target_value
-        return method, action, payload
+    if meta_labels is None:
+        return None
 
-    return None
+    return {
+        "long_rows": merged_long_rows,
+        "meta_labels": meta_labels,
+        "student_count": len(seen_students),
+        "weeks": weeks,
+        "items_per_week": items_per_week,
+    }
+
+
+def build_userid_studentid_map(html: str):
+    """local/ubonattend/report.php 페이지에서 my_status.php 링크가 있는 행마다, 그 행의
+    셀 중 5~10자리 숫자만 있는 셀을 학번으로 보고 {userid: studentId} 매핑을 만든다."""
+    soup = BeautifulSoup(html, "html.parser")
+    mapping = {}
+
+    for row in soup.find_all("tr"):
+        link = row.find("a", href=lambda h: h and "my_status.php" in h)
+        if link is None:
+            continue
+
+        m = MY_STATUS_USERID_RE.search(link["href"])
+        if not m:
+            continue
+        userid = m.group(1)
+
+        student_id = ""
+        for cell in row.find_all(["td", "th"]):
+            text = cell.get_text(strip=True)
+            if STUDENT_ID_RE.match(text):
+                student_id = text
+                break
+
+        mapping[userid] = student_id
+
+    return mapping
+
+
+def fetch_full_userid_studentid_map(session, report_url: str, max_pages: int = 20, page_size: int = 100):
+    """report.php의 '모두 보기' select는 대형 강좌에서 실제 전체 인원을 다 안 돌려줄 수 있음을
+    실사이트로 확인했다(예: 46명 중 15명만). 참고 스크립트(moodle_forum_crawler.js)의
+    buildUseridMap처럼 listsize/page 쿼리 파라미터로 직접 페이지를 순회하며 병합하고,
+    한 페이지에서 my_status.php 링크가 하나도 안 나오면 멈춘다."""
+    sep = "&" if "?" in report_url else "?"
+    mapping = {}
+
+    for page in range(max_pages):
+        url = f"{report_url}{sep}listsize={page_size}&page={page}"
+        resp = session.get(url)
+        resp.raise_for_status()
+
+        page_map = build_userid_studentid_map(resp.text)
+        if not page_map:
+            break
+
+        mapping.update(page_map)
+
+    return mapping
