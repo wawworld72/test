@@ -346,3 +346,25 @@ def build_userid_studentid_map(html: str):
         mapping[userid] = student_id
 
     return mapping
+
+
+def fetch_full_userid_studentid_map(session, report_url: str, max_pages: int = 20, page_size: int = 100):
+    """report.php의 '모두 보기' select는 대형 강좌에서 실제 전체 인원을 다 안 돌려줄 수 있음을
+    실사이트로 확인했다(예: 46명 중 15명만). 참고 스크립트(moodle_forum_crawler.js)의
+    buildUseridMap처럼 listsize/page 쿼리 파라미터로 직접 페이지를 순회하며 병합하고,
+    한 페이지에서 my_status.php 링크가 하나도 안 나오면 멈춘다."""
+    sep = "&" if "?" in report_url else "?"
+    mapping = {}
+
+    for page in range(max_pages):
+        url = f"{report_url}{sep}listsize={page_size}&page={page}"
+        resp = session.get(url)
+        resp.raise_for_status()
+
+        page_map = build_userid_studentid_map(resp.text)
+        if not page_map:
+            break
+
+        mapping.update(page_map)
+
+    return mapping

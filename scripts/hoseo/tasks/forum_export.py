@@ -21,8 +21,13 @@ hoseo_forum_diagnose.py로 실제 사이트에서 확인한 동작:
 export.php CSV에는 Moodle 내부 숫자 userid는 있지만 학번은 없다. course_url에서
 과목 id를 뽑아 local/ubonattend/report.php의 학생 목록 페이지를 조회하고,
 my_status.php 링크가 있는 행마다 그 행의 5~10자리 숫자 셀을 학번으로 보는
-{userid: 학번} 매핑(parsing.build_userid_studentid_map)을 만들어 userid 바로
-뒤에 학번 열을 끼워 넣는다. 매핑에 없는 userid(교수/조교 계정 등)는 빈 문자열.
+{userid: 학번} 매핑을 만들어 userid 바로 뒤에 학번 열을 끼워 넣는다.
+매핑에 없는 userid(교수/조교 계정 등)는 빈 문자열.
+
+실사이트로 확인한 것: report.php의 '모두 보기' select 하나만으로는 대형 강좌의
+전체 인원이 다 안 나온다(예: 실제 46명 중 15명만) - listsize/page 쿼리 파라미터로
+직접 페이지를 순회해야 전체가 나온다(parsing.fetch_full_userid_studentid_map,
+참고 스크립트 moodle_forum_crawler.js의 buildUseridMap과 동일한 방식).
 """
 
 import csv
@@ -137,12 +142,8 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     if report_url is None:
         print(f"[forum_export] course_url에서 id를 못 찾아 학번 매핑을 건너뜁니다: {course_url}")
     else:
-        report_html, _, report_info = parsing.fetch_full_report_html(session, report_url)
-        userid_map = parsing.build_userid_studentid_map(report_html)
-        print(
-            f"[forum_export] 학번-userid 매핑 {len(userid_map)}건 확보 "
-            f"(report student_count={report_info['before_count']}/{report_info['after_count']})"
-        )
+        userid_map = parsing.fetch_full_userid_studentid_map(session, report_url)
+        print(f"[forum_export] 학번-userid 매핑 {len(userid_map)}건 확보 (페이지 순회)")
 
     fields = None
     userid_idx = None
