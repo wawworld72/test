@@ -183,11 +183,17 @@ function dispatchWorkflow(workflowFile, inputs) {
 var HOSEO_TASK_WORKFLOW = 'hoseo-task.yml';
 
 /**
- * 특정 출결 URL을 넘겨 hoseo-task.yml(HTTP 기반 스크래퍼)을 실행시키고, 완료될
- * 때까지 기다렸다가 결과를 실행 로그(보기 > 실행 기록)에 출력한다. Apps Script
- * 편집기에서 이 함수를 직접 실행해 확인하는 용도 - 시트/메뉴와는 무관하다.
+ * 과목 메인 화면 링크(예: course/view.php?id=40069) 하나만 넘기면 hoseo-task.yml의
+ * task=course가 출결과 토론방을 한 번에 수집해 각각 시트 탭(Hoseo/ForumExport)에
+ * 반영한다. 이 함수는 그 실행이 끝날 때까지 기다렸다가 두 결과를 모두 실행 로그
+ * (보기 > 실행 기록)에 출력한다. Apps Script 편집기에서 이 함수를 직접 실행해
+ * 확인하는 용도 - 시트 반영 자체는 워크플로가 이미 끝냈고, 여기서는 로그만 본다.
+ *
+ * 예전에는 출결은 local/ubonattend/report.php?id=N 링크를 직접 넘겨야 했지만,
+ * 그 id가 과목 id(course/view.php?id=N)와 같다는 걸 확인해 course.py가 report_url을
+ * 스스로 만든다 - 이제 항상 과목 링크 하나만 넘기면 된다.
  */
-function fetchAttendanceAndLog(reportUrl) {
+function fetchCourseDataAndLog(courseUrl) {
   var token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
   var ref = PropertiesService.getScriptProperties().getProperty('GITHUB_REF') || 'main';
   if (!token) {
@@ -198,7 +204,7 @@ function fetchAttendanceAndLog(reportUrl) {
   var dispatchedAt = new Date();
   var request = buildDispatchRequest(
     GITHUB_OWNER, GITHUB_REPO, HOSEO_TASK_WORKFLOW, ref,
-    { task: 'attendance', report_url: reportUrl }, token
+    { task: 'course', course_url: courseUrl }, token
   );
   var dispatchResponse = UrlFetchApp.fetch(request.url, request.options);
   if (dispatchResponse.getResponseCode() !== 204) {
@@ -217,6 +223,7 @@ function fetchAttendanceAndLog(reportUrl) {
 
   var logText = fetchJobLogText(runId, token);
   Logger.log(extractAttendanceSection(logText));
+  Logger.log(extractForumExportSection(logText));
 }
 
 /** workflow_dispatch 응답에는 run_id가 없어서, 방금 시작한 것보다 최신인 run이
@@ -268,9 +275,9 @@ function fetchJobLogText(runId, token) {
 }
 
 /**
- * Apps Script 편집기에서 바로 실행해 fetchAttendanceAndLog()를 시험해보는 용도.
+ * Apps Script 편집기에서 바로 실행해 fetchCourseDataAndLog()를 시험해보는 용도.
  * 실행 후 '실행 기록'(또는 Ctrl+Enter 로그 패널)에서 결과를 확인한다.
  */
-function testFetchAttendance() {
-  fetchAttendanceAndLog('https://learn.hoseo.ac.kr/local/ubonattend/report.php?id=43780');
+function testFetchCourseData() {
+  fetchCourseDataAndLog('https://learn.hoseo.ac.kr/course/view.php?id=43780');
 }

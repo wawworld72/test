@@ -3,20 +3,21 @@
 
 새 요청을 추가하려면:
     1) scripts/hoseo/tasks/ 밑에 아래 세 함수를 가진 모듈을 추가한다 (attendance.py,
-       forum_export.py를 참고):
+       forum_export.py, course.py를 참고):
          - fetch(session, **params) -> dict|None
-         - write_csv(result, out_path) -> None
+         - write_csv(result, out_dir) -> list[(csv_path, sheet_name)]
          - print_summary(result) -> None
     2) 아래 TASKS 딕셔너리에 한 줄 추가한다.
-매 실행마다 결과는 로그 출력 + CSV 아티팩트에 더해 구글 시트 탭에도 반영된다
-(hoseo-task.yml의 "Push to Google Sheet" 스텝이 scripts/push_to_sheet.py로
-반영). 어느 탭에 쓸지는 task 모듈의 SHEET_NAME으로 정하고, 안 정해뒀으면
-task 이름(예: "attendance")을 탭 이름으로 그대로 쓴다.
+write_csv가 돌려준 (csv_path, sheet_name) 목록은 이 진입점이 그대로 순회하며
+scripts/push_to_sheet.py로 각각 구글 시트 탭에 반영한다 - course.py처럼 한 번의
+실행에서 여러 탭에 나눠 써야 하는 task도 목록 길이만 다를 뿐 똑같이 처리된다.
+GAS_WEBAPP_URL/GAS_API_TOKEN이 없는 로컬 실행에서는 시트 반영만 건너뛴다.
+
 session.py(로그인 유지)나 parsing.py(표 파싱)는 건드릴 필요 없다. 각 task는
 자기 결과 모양(dict shape)에 맞는 write_csv/print_summary만 책임지므로 이
 진입점은 task별 데이터 구조를 몰라도 된다.
 
-환경변수: HOSEO_USERNAME, HOSEO_PASSWORD
+환경변수: HOSEO_USERNAME, HOSEO_PASSWORD, GAS_WEBAPP_URL, GAS_API_TOKEN
 """
 
 import argparse
@@ -25,32 +26,38 @@ import sys
 from pathlib import Path
 
 from hoseo.session import HoseoLoginError, HoseoSession
-from hoseo.tasks import attendance, forum_export
+from hoseo.tasks import attendance, course, forum_export
+from push_to_sheet import build_rows, push
 
 OUTPUT_DIR = Path(__file__).parent.parent / "attendance_output"
 
 TASKS = {
     "attendance": attendance,
     "forum_export": forum_export,
+    "course": course,
 }
 
 
-def _write_github_output(csv_path, sheet_name):
-    """GitHub Actions 다음 스텝(시트 반영)이 쓸 수 있게 csv_path/sheet_name을 넘긴다.
-    GITHUB_OUTPUT이 없는 로컬 실행에서는 그냥 건너뛴다."""
-    github_output = os.environ.get("GITHUB_OUTPUT")
-    if not github_output:
+def _push_to_sheet(csv_path, sheet_name):
+    webapp_url = os.environ.get("GAS_WEBAPP_URL")
+    token = os.environ.get("GAS_API_TOKEN")
+    if not webapp_url or not token:
+        print(f"GAS_WEBAPP_URL/GAS_API_TOKEN이 없어 '{sheet_name}' 시트 반영을 건너뜁니다.")
         return
-    with open(github_output, "a") as f:
-        f.write(f"csv_path={csv_path}\n")
-        f.write(f"sheet_name={sheet_name}\n")
+
+    rows = build_rows(csv_path)
+    result = push(rows, sheet_name, webapp_url, token)
+    if not result.get("ok"):
+        print(f"'{sheet_name}' 시트 반영 실패: {result.get('error')}", file=sys.stderr)
+        sys.exit(1)
+    print(f"스프레드시트 '{result.get('sheetName')}' 시트에 {result.get('rowCount')}행 반영 완료")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", required=True, choices=sorted(TASKS))
     parser.add_argument("--report-url", default="", help="attendance task용 출석부 리포트 URL")
-    parser.add_argument("--course-url", default="", help="forum_export task용 과목 페이지 URL")
+    parser.add_argument("--course-url", default="", help="course/forum_export task용 과목 페이지 URL")
     args = parser.parse_args()
 
     username = os.environ.get("HOSEO_USERNAME")
@@ -83,12 +90,10 @@ def main():
     task_module.print_summary(result)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
-    out_path = OUTPUT_DIR / f"{args.task}_long.csv"
-    task_module.write_csv(result, out_path)
-    print(f"저장됨: {out_path}")
-
-    sheet_name = getattr(task_module, "SHEET_NAME", args.task)
-    _write_github_output(out_path, sheet_name)
+    outputs = task_module.write_csv(result, OUTPUT_DIR)
+    for csv_path, sheet_name in outputs:
+        print(f"저장됨: {csv_path}")
+        _push_to_sheet(csv_path, sheet_name)
 
 
 if __name__ == "__main__":

@@ -4,23 +4,28 @@ name: Hoseo Task (HTTP)
 # network_diagnose_lib.py로 로그인이 평문 폼+세션 쿠키, 출석부 조회가 서버
 # 렌더링 HTML임을 확인한 뒤 Playwright(hoseo_attendance_scraper.py)에서
 # 이쪽으로 옮기는 중.
+#
+# task=course가 기본값 - 과목 메인 화면 링크(course_url) 하나만 넘기면 출결과
+# 토론방을 한 번에 수집해 각각의 시트 탭에 반영한다. attendance/forum_export는
+# 개별 task만 따로 테스트하고 싶을 때 쓰는 하위 옵션.
 on:
   workflow_dispatch:
     inputs:
       task:
-        description: '실행할 요청 종류'
+        description: '실행할 요청 종류 (course = 출결+토론방 한 번에)'
         required: true
-        default: 'attendance'
+        default: 'course'
         type: choice
         options:
+          - course
           - attendance
           - forum_export
       report_url:
-        description: '리포트 URL (task=attendance일 때만 사용, 비우면 기본값)'
+        description: '리포트 URL (task=attendance 단독 테스트일 때만 사용, 비우면 기본값)'
         required: false
         default: ''
       course_url:
-        description: '과목 페이지 URL (task=forum_export일 때만 사용, 비우면 기본값)'
+        description: '과목 페이지 URL (task=course/forum_export일 때 사용, 비우면 기본값)'
         required: false
         default: ''
 
@@ -38,24 +43,16 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: Run task
-        id: run_task
         env:
           HOSEO_USERNAME: ${{ secrets.HOSEO_USERNAME }}
           HOSEO_PASSWORD: ${{ secrets.HOSEO_PASSWORD }}
+          GAS_WEBAPP_URL: ${{ secrets.GAS_WEBAPP_URL }}
+          GAS_API_TOKEN: ${{ secrets.GAS_API_TOKEN }}
         run: |
           python scripts/run_hoseo_task.py \
             --task "${{ github.event.inputs.task }}" \
             --report-url "${{ github.event.inputs.report_url }}" \
             --course-url "${{ github.event.inputs.course_url }}"
-
-      - name: Push to Google Sheet
-        env:
-          GAS_WEBAPP_URL: ${{ secrets.GAS_WEBAPP_URL }}
-          GAS_API_TOKEN: ${{ secrets.GAS_API_TOKEN }}
-        run: |
-          python scripts/push_to_sheet.py \
-            "${{ steps.run_task.outputs.csv_path }}" \
-            "${{ steps.run_task.outputs.sheet_name }}"
 
       - name: Upload output artifact
         if: always()
