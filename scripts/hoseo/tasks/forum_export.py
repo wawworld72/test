@@ -22,6 +22,7 @@ hoseo_forum_diagnose.py로 실제 사이트에서 확인한 동작:
 import csv
 import io
 import re
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 
@@ -172,11 +173,15 @@ def fetch(session, course_url=DEFAULT_COURSE_URL):
     }
 
 
-def write_csv(result, out_path):
+def write_csv(result, out_dir):
+    """out_dir 밑에 CSV를 쓰고, (csv_path, 시트이름) 목록을 돌려준다 - course.py처럼
+    여러 task를 조합해 호출하는 쪽이 어디에 몇 개를 썼는지 알 수 있게."""
+    out_path = Path(out_dir) / "forum_export_long.csv"
     with open(out_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow(result["header"])
         writer.writerows(result["rows"])
+    return [(out_path, SHEET_NAME)]
 
 
 def print_summary(result):

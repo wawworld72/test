@@ -8,6 +8,8 @@ Playwright 버전(hoseo_attendance_scraper.py)을 대체한다 - network_diagnos
 실제 로그인/조회 요청을 캡처해서 평문 폼 로그인 + 서버 렌더링 HTML임을 확인했다.
 """
 
+from pathlib import Path
+
 from .. import parsing
 
 DEFAULT_URL = "https://learn.hoseo.ac.kr/local/ubonattend/report.php?id=40069"
@@ -47,8 +49,12 @@ def fetch(session, report_url: str = DEFAULT_URL):
     return after_result
 
 
-def write_csv(result, out_path):
+def write_csv(result, out_dir):
+    """out_dir 밑에 CSV를 쓰고, (csv_path, 시트이름) 목록을 돌려준다 - course.py처럼
+    여러 task를 조합해 호출하는 쪽이 어디에 몇 개를 썼는지 알 수 있게."""
+    out_path = Path(out_dir) / "attendance_long.csv"
     parsing.write_long_csv(result["long_rows"], result["meta_labels"], out_path)
+    return [(out_path, SHEET_NAME)]
 
 
 def print_summary(result):
