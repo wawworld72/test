@@ -11,6 +11,9 @@ name: Hoseo Task (HTTP)
 on:
   workflow_dispatch:
     inputs:
+      class_name:
+        description: '어느 반의 스프레드시트/시크릿을 쓸지 - 저장소 Settings > Environments에 등록된 이름 그대로 (예: class-01)'
+        required: true
       task:
         description: '실행할 요청 종류 (course = 출결+토론방 한 번에)'
         required: true
@@ -32,6 +35,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.class_name }}
     steps:
       - uses: actions/checkout@v4
 

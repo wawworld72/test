@@ -3,6 +3,9 @@ name: Hoseo Attendance Scrape
 on:
   workflow_dispatch:
     inputs:
+      class_name:
+        description: '어느 반의 스프레드시트/시크릿을 쓸지 - 저장소 Settings > Environments에 등록된 이름 그대로 (예: class-01)'
+        required: true
       report_url:
         description: 'Attendance report URL'
         required: false
@@ -11,6 +14,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.class_name }}
     steps:
       - uses: actions/checkout@v4
 

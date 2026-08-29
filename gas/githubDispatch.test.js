@@ -1,4 +1,4 @@
-const { buildDispatchRequest } = require('./githubDispatch');
+const { buildDispatchRequest, withClassInput } = require('./githubDispatch');
 
 describe('buildDispatchRequest', () => {
   test('builds the dispatches URL and JSON payload', () => {
@@ -29,5 +29,23 @@ describe('buildDispatchRequest', () => {
 
   test('throws when a required argument is missing', () => {
     expect(() => buildDispatchRequest('o', 'r', 'wf.yml', 'main', {}, '')).toThrow();
+  });
+});
+
+describe('withClassInput', () => {
+  test('adds class_name to existing inputs without mutating the original', () => {
+    const inputs = { course_name: '자료구조' };
+    const merged = withClassInput(inputs, 'class-01');
+
+    expect(merged).toEqual({ course_name: '자료구조', class_name: 'class-01' });
+    expect(inputs).toEqual({ course_name: '자료구조' });
+  });
+
+  test('works with no inputs', () => {
+    expect(withClassInput(null, 'class-02')).toEqual({ class_name: 'class-02' });
+  });
+
+  test('throws when className is missing', () => {
+    expect(() => withClassInput({}, '')).toThrow();
   });
 });
