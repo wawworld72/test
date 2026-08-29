@@ -1,4 +1,4 @@
-const { buildDispatchRequest, withClassInput } = require('./githubDispatch');
+const { buildDispatchRequest, withTargetEnvInput } = require('./githubDispatch');
 
 describe('buildDispatchRequest', () => {
   test('builds the dispatches URL and JSON payload', () => {
@@ -32,20 +32,20 @@ describe('buildDispatchRequest', () => {
   });
 });
 
-describe('withClassInput', () => {
-  test('adds class_name to existing inputs without mutating the original', () => {
+describe('withTargetEnvInput', () => {
+  test('adds target_env to existing inputs without mutating the original', () => {
     const inputs = { course_name: '자료구조' };
-    const merged = withClassInput(inputs, 'class-01');
+    const merged = withTargetEnvInput(inputs, 'class-01');
 
-    expect(merged).toEqual({ course_name: '자료구조', class_name: 'class-01' });
+    expect(merged).toEqual({ course_name: '자료구조', target_env: 'class-01' });
     expect(inputs).toEqual({ course_name: '자료구조' });
   });
 
   test('works with no inputs', () => {
-    expect(withClassInput(null, 'class-02')).toEqual({ class_name: 'class-02' });
+    expect(withTargetEnvInput(null, 'class-02')).toEqual({ target_env: 'class-02' });
   });
 
-  test('throws when className is missing', () => {
-    expect(() => withClassInput({}, '')).toThrow();
+  test('throws when targetEnv is missing', () => {
+    expect(() => withTargetEnvInput({}, '')).toThrow();
   });
 });

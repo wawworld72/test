@@ -11,7 +11,7 @@ name: Hoseo Task (HTTP)
 on:
   workflow_dispatch:
     inputs:
-      class_name:
+      target_env:
         description: '어느 반의 스프레드시트/시크릿을 쓸지 (GitHub Environment 이름)'
         required: true
         type: choice
@@ -39,7 +39,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.class_name }}
+    environment: ${{ github.event.inputs.target_env }}
     steps:
       - uses: actions/checkout@v4
 

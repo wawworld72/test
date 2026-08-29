@@ -55,9 +55,10 @@ GitHub Actions는 `workflow_dispatch` REST API로도 실행 가능하다. GAS에
   GAS를 배포할 때 쓰는, 테넌트(반)와 무관한 값들.
 - **GitHub Environment Secrets** (`GAS_WEBAPP_URL`, `GAS_API_TOKEN`, 이름표는 `class-01`/`class-02`):
   테넌트마다 다른 값이라 저장소 하나에 여러 벌 넣어야 하는 것들. 자세한 이유는 8번 참고.
-- **GAS 스크립트 속성** (`API_TOKEN`, `GITHUB_TOKEN`, `GITHUB_REF`, `CLASS_NAME`): GAS 코드가
-  실행 중에 참조하는 것들. 레포에는 절대 커밋하지 않고 Apps Script 편집기(Project Settings)에서만
-  설정. `CLASS_NAME`은 이 스프레드시트가 어느 테넌트(반)인지를 나타내며 8번에서 다룬다.
+- **GAS 스크립트 속성** (`API_TOKEN`, `GITHUB_TOKEN`, `GITHUB_REF`, `GITHUB_TARGET_ENV`): GAS
+  코드가 실행 중에 참조하는 것들. 레포에는 절대 커밋하지 않고 Apps Script 편집기(Project
+  Settings)에서만 설정. `GITHUB_TARGET_ENV`는 이 스프레드시트가 어느 테넌트(반)인지를
+  나타내며 8번에서 다룬다.
 
 ## 7. CI를 두 워크플로로 분리
 - 모든 push/PR에서 도는 가벼운 테스트 워크플로 (`npm test`, `python -m unittest`) — 빠른 피드백용.
@@ -75,13 +76,25 @@ Environment secret로 넣는다. 이 이름표는 실제 스프레드시트나 �
 어느 시크릿 세트를 쓸지"만 가리키는 라벨이다.
 
 워크플로 쪽에서 필요한 건 두 가지뿐:
-- `workflow_dispatch.inputs`에 이름표를 고르는 `choice` 타입 입력(`class_name`)을 추가.
-- 잡에 `environment: ${{ github.event.inputs.class_name }}`을 건다 — 이러면 그 잡의
+- `workflow_dispatch.inputs`에 이름표를 고르는 `choice` 타입 입력(`target_env`)을 추가.
+- 잡에 `environment: ${{ github.event.inputs.target_env }}`을 건다 — 이러면 그 잡의
   `secrets.*`가 그 Environment에 등록된 값으로 해석된다.
 
 사람이 매번 워크플로 실행 화면에서 이름표를 고르지 않아도 되게 하려면, 트리거를 거는 쪽(이
 리포는 GAS)이 자기가 어느 테넌트인지 알고 있다가 `workflow_dispatch` 요청의 `inputs`에
 같이 실어 보내면 된다 — 즉 "어느 벌을 쓸지"는 저장소가 아니라 호출자가 알고 있는 값이다.
+이 입력 이름(`target_env`)은 실제로는 호출하는 GAS 쪽 코드와 반드시 일치해야 한다 — 다른
+이름(예: `class_name`)으로 워크플로를 고치면, 이미 그 이름으로 호출하도록 짜여 있는 GAS
+코드는 "Unexpected inputs provided" 422를 받는다. 워크플로 파일과 그걸 호출하는 GAS 코드가
+서로 다른 저장소/프로젝트에 있을 때 특히 놓치기 쉬운 부분.
+
+**병합/배포 전에 반드시 확인**: `clasp push`가 향하는 `scriptId`(`gas/.clasp.json`)가 이미
+다른 목적(예: 채점/성적공개 등)으로 쓰이는 Apps Script 프로젝트와 같다면, `clasp push`는
+그 프로젝트의 파일 목록을 로컬 것으로 통째로 교체해버리므로(추가/병합이 아님) 기존 파일이
+지워질 수 있다. 게다가 `doPost`/`doGet`/`onOpen`처럼 프로젝트당 하나만 있어야 하는 예약
+함수가 다른 파일에 이미 정의돼 있다면, Apps Script는 이름이 겹치는 함수 중 하나만 남기고
+나머지는 조용히 무시한다. scriptId가 정말 이 자동화 전용으로 새로 만든 프로젝트인지 반드시
+먼저 확인하고 배포한다.
 
 ## 9. Claude(나) 자신의 접근 권한 한계를 먼저 확인하고 설계
 GAS 실행/Cloud Logging API용 커넥터는 없고, Google Drive 커넥터는 파일 읽기 전용,

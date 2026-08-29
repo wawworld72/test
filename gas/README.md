@@ -62,11 +62,15 @@ secrets가 아니라 **GitHub Environment secrets**로 등록한다 (아래 "여
 ## 여러 반(스프레드시트)을 같은 저장소로 동시에 자동화하기
 
 `attendance-scrape.yml`/`ibk-attendance-scrape.yml`/`hoseo-task.yml`은 실행할 때
-`class_name`(예: `class-01`, `class-02`)을 고르게 돼 있고, 각 잡에
-`environment: ${{ github.event.inputs.class_name }}`이 걸려 있다. GitHub Actions는 이
+`target_env`(예: `class-01`, `class-02`)를 고르게 돼 있고, 각 잡에
+`environment: ${{ github.event.inputs.target_env }}`이 걸려 있다. GitHub Actions는 이
 `environment:`에 지정된 이름의 **Environment**에 등록된 시크릿을 그 잡의 `secrets.*`로
 꺼내 쓰므로, 반마다 다른 스프레드시트의 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을 같은 워크플로
 파일 하나로 동시에 쓸 수 있다.
+
+(입력 이름을 `target_env`/`GITHUB_TARGET_ENV`로 정한 건 이미 별도로 운영 중인 다른 GAS
+프로젝트의 명명과 맞춘 것이다 — 두 쪽이 이름만 다르면 같은 워크플로를 놓고 "Unexpected
+inputs provided" 422가 난다.)
 
 `class-01`/`class-02`는 실제 스프레드시트나 수업과는 무관한, 저장소 안에서만 쓰는 이름표다 -
 "이번 실행이 어느 쪽 시크릿 세트를 꺼내 쓸지" 구분하는 라벨일 뿐이다.
@@ -74,13 +78,26 @@ secrets가 아니라 **GitHub Environment secrets**로 등록한다 (아래 "여
 1. GitHub 저장소 Settings > Environments에서 `class-01`, `class-02` 두 개를 만든다.
 2. 각 Environment에 그 반 스프레드시트에 맞는 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을
    Environment secret로 등록한다 (반마다 별도로 `clasp create`한 스프레드시트 + 배포 필요).
-3. 워크플로를 수동 실행할 때 `class_name`을 `class-01`/`class-02` 중 골라서 실행하면
+3. 워크플로를 수동 실행할 때 `target_env`를 `class-01`/`class-02` 중 골라서 실행하면
    해당 Environment의 값이 쓰인다.
 4. 시트 메뉴("출결 갱신")나 `fetchCourseDataAndLog`로 GAS가 워크플로를 대신 트리거해줄
    때는 사람이 매번 고를 필요 없이, 그 스프레드시트에 바인딩된 GAS 프로젝트의 스크립트
-   속성 `CLASS_NAME`을 한 번 설정해두면 `dispatchWorkflow`가 자동으로 `class_name` 입력에
-   실어 보낸다 (`gas/githubDispatch.js`의 `withClassInput`). 즉 1반 스프레드시트의 GAS
-   프로젝트에는 `CLASS_NAME=class-01`, 2반에는 `CLASS_NAME=class-02`를 설정한다.
+   속성 `GITHUB_TARGET_ENV`를 한 번 설정해두면 `dispatchWorkflow`가 자동으로 `target_env`
+   입력에 실어 보낸다 (`gas/githubDispatch.js`의 `withTargetEnvInput`). 즉 1반 스프레드시트의
+   GAS 프로젝트에는 `GITHUB_TARGET_ENV=class-01`, 2반에는 `GITHUB_TARGET_ENV=class-02`를
+   설정한다.
+
+**⚠️ `gas/` 폴더가 배포하는 대상 확인**: 이 저장소의 `gas-deploy.yml`은 `gas/.clasp.json`의
+`scriptId`가 가리키는 Apps Script 프로젝트에 `clasp push --force`를 실행한다. `clasp push`는
+Apps Script API의 `updateContent`를 쓰는데, 이건 **그 프로젝트의 파일 목록을 로컬(`gas/`)
+것으로 통째로 교체**하는 방식이라 추가/병합이 아니다. 만약 이 `scriptId`가 이미 다른 파일들
+(예: 채점엔진, 메뉴, 성적공개 등 이 저장소에 없는 `.gs` 파일들)을 가진 실제 운영 중인
+스프레드시트와 같은 프로젝트를 가리킨다면, `clasp push`가 그 파일들을 전부 지워버린다. 게다가
+`Code.js`는 `doPost`/`doGet`/`onOpen`을 정의하므로, 같은 프로젝트 안에 이미 그 이름의 함수가
+다른 파일에 있다면(Apps Script는 이름이 겹치는 최상위 함수 중 하나만 남기고 나머지는 조용히
+무시한다) 하나가 조용히 무시되는 문제가 재발한다. `gas/.clasp.json`의 `scriptId`를 바꾸거나
+새로 설정하기 전에, 그 값이 정말 "이 저장소 전용으로 새로 만든" 스프레드시트를 가리키는지
+먼저 확인한다.
 
 등록 후에는 **코드를 고치고 main에 push하기만 하면 끝**이다. 복사/붙여넣기나 수동 배포 없이:
 - `gas/**` 변경분을 main에 push → `.github/workflows/gas-deploy.yml`이
@@ -103,7 +120,7 @@ secrets가 아니라 **GitHub Environment secrets**로 등록한다 (아래 "여
    - `GITHUB_REF` (선택) = 워크플로 파일이 있는 브랜치명. main에 아직 병합 전이면
      `claude/google-apps-script-github-4ksesx`처럼 현재 브랜치명을 넣어야 하고,
      병합 후에는 지우거나 `main`으로 바꾼다 (비워두면 기본값 `main` 사용).
-   - `CLASS_NAME` = 이 스프레드시트가 어느 반인지 (`class-01` 또는 `class-02`). 워크플로가
+   - `GITHUB_TARGET_ENV` = 이 스프레드시트가 어느 반인지 (`class-01` 또는 `class-02`). 워크플로가
      이 값으로 어느 GitHub Environment의 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을 쓸지 정하므로,
      반마다 다른 스프레드시트에 바인딩된 GAS 프로젝트에는 반드시 서로 다른 값을 넣어야 한다
      (자세한 내용은 위 "여러 반 동시 자동화" 참고).
