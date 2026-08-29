@@ -12,12 +12,8 @@ on:
   workflow_dispatch:
     inputs:
       target_env:
-        description: '어느 반의 스프레드시트/시크릿을 쓸지 (GitHub Environment 이름)'
+        description: '어느 반의 스프레드시트/시크릿을 쓸지 - 저장소 Settings > Environments에 등록된 이름 그대로 (예: class-01)'
         required: true
-        type: choice
-        options:
-          - class-01
-          - class-02
       task:
         description: '실행할 요청 종류 (course = 출결+토론방 한 번에)'
         required: true

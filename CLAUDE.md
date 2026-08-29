@@ -76,7 +76,11 @@ Environment secret로 넣는다. 이 이름표는 실제 스프레드시트나 �
 어느 시크릿 세트를 쓸지"만 가리키는 라벨이다.
 
 워크플로 쪽에서 필요한 건 두 가지뿐:
-- `workflow_dispatch.inputs`에 이름표를 고르는 `choice` 타입 입력(`target_env`)을 추가.
+- `workflow_dispatch.inputs`에 이름표를 받는 입력(`target_env`)을 추가. 반 개수가 고정이
+  아니면 `type: choice` + 고정 `options` 목록으로 만들지 않는다 — 그러면 테넌트가 늘 때마다
+  워크플로 파일을 고쳐야 해서 "저장소는 몇 개 테넌트가 있는지 몰라도 된다"는 원래 의도가
+  깨진다. 그냥 자유 입력 문자열로 두고, 값은 실제 등록된 Environment 이름과 정확히 일치하는지
+  호출하는 쪽(GAS 등)이 책임진다 — 틀리면 존재하지 않는 Environment를 참조해 잡이 실패한다.
 - 잡에 `environment: ${{ github.event.inputs.target_env }}`을 건다 — 이러면 그 잡의
   `secrets.*`가 그 Environment에 등록된 값으로 해석된다.
 

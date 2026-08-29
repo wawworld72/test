@@ -73,9 +73,16 @@ secrets가 아니라 **GitHub Environment secrets**로 등록한다 (아래 "여
 inputs provided" 422가 난다.)
 
 `class-01`/`class-02`는 실제 스프레드시트나 수업과는 무관한, 저장소 안에서만 쓰는 이름표다 -
-"이번 실행이 어느 쪽 시크릿 세트를 꺼내 쓸지" 구분하는 라벨일 뿐이다.
+"이번 실행이 어느 쪽 시크릿 세트를 꺼내 쓸지" 구분하는 라벨일 뿐이다. `target_env` 입력은
+고정된 목록(`type: choice`)이 아니라 자유 입력 문자열이다 - 반이 몇 개든 워크플로 YAML은
+그대로 두고 Environment만 추가하면 되므로, 개수가 둘에서 셋, 넷으로 늘어나도 이 저장소를
+고칠 필요가 없다. (`type: choice`로 고정하면 반이 늘 때마다 이 파일을 고쳐야 해서, "저장소는
+몇 개 테넌트가 있는지 몰라도 된다"는 원래 의도와 어긋난다.) 대신 오타를 내면 존재하지 않는
+Environment를 참조해 잡이 바로 실패하므로, `target_env` 값은 항상 등록해둔 Environment
+이름과 정확히 같아야 한다.
 
-1. GitHub 저장소 Settings > Environments에서 `class-01`, `class-02` 두 개를 만든다.
+1. GitHub 저장소 Settings > Environments에서 `class-01`, `class-02` 두 개를 만든다 (반이
+   늘어나면 그만큼 더 만들면 된다 - 워크플로 파일은 고칠 필요 없음).
 2. 각 Environment에 그 반 스프레드시트에 맞는 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을
    Environment secret로 등록한다 (반마다 별도로 `clasp create`한 스프레드시트 + 배포 필요).
 3. 워크플로를 수동 실행할 때 `target_env`를 `class-01`/`class-02` 중 골라서 실행하면
