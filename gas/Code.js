@@ -167,7 +167,7 @@ function triggerIbkWorkflow() {
  * 지정한 워크플로 파일을 실행시킨다. 대상 브랜치는 스크립트 속성 GITHUB_REF로 바꿀 수 있고
  * 없으면 main을 사용한다 (워크플로 파일이 아직 main에 없다면 해당 브랜치명으로 설정해야 함).
  *
- * inputs에는 항상 target_env(스크립트 속성 GITHUB_TARGET_ENV)가 함께 실려 나간다 - 워크플로
+ * inputs에는 항상 class_name(스크립트 속성 GITHUB_TARGET_ENV)이 함께 실려 나간다 - 워크플로
  * YAML이 이 값으로 어느 GitHub Environment(class-01/class-02)의 GAS_WEBAPP_URL/GAS_API_TOKEN을
  * 쓸지 정하므로, 이 스프레드시트가 어느 반인지는 여기서 한 번만 설정해두면 된다.
  */
@@ -182,8 +182,8 @@ function dispatchWorkflow(workflowFile, inputs) {
   var ref = properties.getProperty('GITHUB_REF') || 'main';
 
   try {
-    var inputsWithTargetEnv = withTargetEnvInput(inputs, properties.getProperty('GITHUB_TARGET_ENV'));
-    var request = buildDispatchRequest(GITHUB_OWNER, GITHUB_REPO, workflowFile, ref, inputsWithTargetEnv, token);
+    var inputsWithClass = withClassInput(inputs, properties.getProperty('GITHUB_TARGET_ENV'));
+    var request = buildDispatchRequest(GITHUB_OWNER, GITHUB_REPO, workflowFile, ref, inputsWithClass, token);
     var response = UrlFetchApp.fetch(request.url, request.options);
     var code = response.getResponseCode();
 
@@ -225,13 +225,13 @@ function fetchCourseDataAndLog(courseUrl) {
   }
 
   var dispatchedAt = new Date();
-  var inputsWithTargetEnv = withTargetEnvInput(
+  var inputsWithClass = withClassInput(
     { task: 'course', course_url: courseUrl },
     properties.getProperty('GITHUB_TARGET_ENV')
   );
   var request = buildDispatchRequest(
     GITHUB_OWNER, GITHUB_REPO, HOSEO_TASK_WORKFLOW, ref,
-    inputsWithTargetEnv, token
+    inputsWithClass, token
   );
   var dispatchResponse = UrlFetchApp.fetch(request.url, request.options);
   if (dispatchResponse.getResponseCode() !== 204) {
