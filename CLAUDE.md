@@ -51,16 +51,39 @@ GitHub Actions는 `workflow_dispatch` REST API로도 실행 가능하다. GAS에
   가정하지 말고, 네트워크 정책 때문에 막힐 수 있다는 걸 먼저 확인해야 한다.
 
 ## 6. 시크릿은 저장 위치를 용도에 맞게 분리
-- **GitHub Secrets** (`CLASP_CREDENTIALS`, `GAS_WEBAPP_URL`, `GAS_API_TOKEN`, `GAS_DEPLOYMENT_ID`):
-  GitHub Actions가 GAS를 호출/배포할 때 필요한 것들.
-- **GAS 스크립트 속성** (`API_TOKEN`, `GITHUB_TOKEN`, `GITHUB_REF`): GAS 코드가 실행 중에
-  참조하는 것들. 레포에는 절대 커밋하지 않고 Apps Script 편집기(Project Settings)에서만 설정.
+- **GitHub Repository Secrets** (`CLASP_CREDENTIALS`, `GAS_DEPLOYMENT_ID`): 저장소 자체가
+  GAS를 배포할 때 쓰는, 테넌트(반)와 무관한 값들.
+- **GitHub Environment Secrets** (`GAS_WEBAPP_URL`, `GAS_API_TOKEN`, 이름표는 `class-01`/`class-02`):
+  테넌트마다 다른 값이라 저장소 하나에 여러 벌 넣어야 하는 것들. 자세한 이유는 8번 참고.
+- **GAS 스크립트 속성** (`API_TOKEN`, `GITHUB_TOKEN`, `GITHUB_REF`, `CLASS_NAME`): GAS 코드가
+  실행 중에 참조하는 것들. 레포에는 절대 커밋하지 않고 Apps Script 편집기(Project Settings)에서만
+  설정. `CLASS_NAME`은 이 스프레드시트가 어느 테넌트(반)인지를 나타내며 8번에서 다룬다.
 
 ## 7. CI를 두 워크플로로 분리
 - 모든 push/PR에서 도는 가벼운 테스트 워크플로 (`npm test`, `python -m unittest`) — 빠른 피드백용.
 - `gas/**` 변경분에만 반응해 테스트 후 실제 배포(push+deploy)하는 워크플로 — 배포는 필요할 때만.
 
-## 8. Claude(나) 자신의 접근 권한 한계를 먼저 확인하고 설계
+## 8. 같은 저장소로 여러 "테넌트"(반)를 동시에 자동화 — GitHub Environments
+
+워크플로가 어느 스프레드시트로 쓸지는 `GAS_WEBAPP_URL`/`GAS_API_TOKEN` 값으로 정해지는데,
+Repository secrets는 저장소당 한 값밖에 못 가진다. 반이 둘이면 하나를 넣는 순간 다른 하나가
+끊긴다 — 시크릿 저장 공간 자체가 "테넌트 하나"만 가정하고 있어서다.
+
+해법은 시크릿을 여러 벌 담을 수 있는 GitHub **Environments** 기능이다: 저장소 안에
+`class-01`, `class-02`처럼 이름표를 만들고 각각에 그 반의 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을
+Environment secret로 넣는다. 이 이름표는 실제 스프레드시트나 수업과 무관하고, "이번 실행이
+어느 시크릿 세트를 쓸지"만 가리키는 라벨이다.
+
+워크플로 쪽에서 필요한 건 두 가지뿐:
+- `workflow_dispatch.inputs`에 이름표를 고르는 `choice` 타입 입력(`class_name`)을 추가.
+- 잡에 `environment: ${{ github.event.inputs.class_name }}`을 건다 — 이러면 그 잡의
+  `secrets.*`가 그 Environment에 등록된 값으로 해석된다.
+
+사람이 매번 워크플로 실행 화면에서 이름표를 고르지 않아도 되게 하려면, 트리거를 거는 쪽(이
+리포는 GAS)이 자기가 어느 테넌트인지 알고 있다가 `workflow_dispatch` 요청의 `inputs`에
+같이 실어 보내면 된다 — 즉 "어느 벌을 쓸지"는 저장소가 아니라 호출자가 알고 있는 값이다.
+
+## 9. Claude(나) 자신의 접근 권한 한계를 먼저 확인하고 설계
 GAS 실행/Cloud Logging API용 커넥터는 없고, Google Drive 커넥터는 파일 읽기 전용,
 GitHub 쪽은 리포/Actions에 거의 완전한 접근권이 있다. 이 비대칭 때문에 "GAS 상태를 어떻게
 들여다볼까"의 답은 항상 "GitHub Actions 로그로 새어나오게 하거나(push_to_sheet.py의 stdout),

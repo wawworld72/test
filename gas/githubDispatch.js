@@ -26,6 +26,26 @@ function buildDispatchRequest(owner, repo, workflowFile, ref, inputs, token) {
   };
 }
 
+/**
+ * 워크플로 입력에 class_name(class-01/class-02)을 얹는다. 워크플로 YAML은 이 값으로
+ * 어느 GitHub Environment(같은 이름의 class-01/class-02)에서 GAS_WEBAPP_URL/GAS_API_TOKEN을
+ * 꺼낼지 정하므로, 반이 다른 스프레드시트에 바인딩된 GAS 프로젝트마다 스크립트 속성
+ * CLASS_NAME을 각자 다르게 설정해두면 같은 워크플로 파일로 두 반이 동시에 자동화된다.
+ */
+function withClassInput(inputs, className) {
+  if (!className) {
+    throw new Error('CLASS_NAME 스크립트 속성이 설정되어 있지 않습니다 (class-01 또는 class-02)');
+  }
+
+  var merged = {};
+  var source = inputs || {};
+  for (var key in source) {
+    merged[key] = source[key];
+  }
+  merged.class_name = className;
+  return merged;
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { buildDispatchRequest: buildDispatchRequest };
+  module.exports = { buildDispatchRequest: buildDispatchRequest, withClassInput: withClassInput };
 }

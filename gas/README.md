@@ -51,9 +51,36 @@
 | Secret | 값 |
 | --- | --- |
 | `CLASP_CREDENTIALS` | 로컬 `~/.clasprc.json` 파일 전체 내용 |
-| `GAS_WEBAPP_URL` | 배포된 웹앱 `/exec` URL |
-| `GAS_API_TOKEN` | `setupApiToken` 실행 로그에 출력된 토큰 |
 | `GAS_DEPLOYMENT_ID` | `clasp deployments`로 확인한 웹앱 배포 ID |
+
+`CLASP_CREDENTIALS`/`GAS_DEPLOYMENT_ID`는 이 저장소 자체(`gas-deploy.yml`)가 코드를 배포할 때
+쓰는 값이라 반과 무관하게 하나만 있으면 된다 (Repository secrets).
+
+`GAS_WEBAPP_URL`/`GAS_API_TOKEN`은 반마다 다른 스프레드시트를 가리켜야 하므로 Repository
+secrets가 아니라 **GitHub Environment secrets**로 등록한다 (아래 "여러 반 동시 자동화" 참고).
+
+## 여러 반(스프레드시트)을 같은 저장소로 동시에 자동화하기
+
+`attendance-scrape.yml`/`ibk-attendance-scrape.yml`/`hoseo-task.yml`은 실행할 때
+`class_name`(예: `class-01`, `class-02`)을 고르게 돼 있고, 각 잡에
+`environment: ${{ github.event.inputs.class_name }}`이 걸려 있다. GitHub Actions는 이
+`environment:`에 지정된 이름의 **Environment**에 등록된 시크릿을 그 잡의 `secrets.*`로
+꺼내 쓰므로, 반마다 다른 스프레드시트의 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을 같은 워크플로
+파일 하나로 동시에 쓸 수 있다.
+
+`class-01`/`class-02`는 실제 스프레드시트나 수업과는 무관한, 저장소 안에서만 쓰는 이름표다 -
+"이번 실행이 어느 쪽 시크릿 세트를 꺼내 쓸지" 구분하는 라벨일 뿐이다.
+
+1. GitHub 저장소 Settings > Environments에서 `class-01`, `class-02` 두 개를 만든다.
+2. 각 Environment에 그 반 스프레드시트에 맞는 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을
+   Environment secret로 등록한다 (반마다 별도로 `clasp create`한 스프레드시트 + 배포 필요).
+3. 워크플로를 수동 실행할 때 `class_name`을 `class-01`/`class-02` 중 골라서 실행하면
+   해당 Environment의 값이 쓰인다.
+4. 시트 메뉴("출결 갱신")나 `fetchCourseDataAndLog`로 GAS가 워크플로를 대신 트리거해줄
+   때는 사람이 매번 고를 필요 없이, 그 스프레드시트에 바인딩된 GAS 프로젝트의 스크립트
+   속성 `CLASS_NAME`을 한 번 설정해두면 `dispatchWorkflow`가 자동으로 `class_name` 입력에
+   실어 보낸다 (`gas/githubDispatch.js`의 `withClassInput`). 즉 1반 스프레드시트의 GAS
+   프로젝트에는 `CLASS_NAME=class-01`, 2반에는 `CLASS_NAME=class-02`를 설정한다.
 
 등록 후에는 **코드를 고치고 main에 push하기만 하면 끝**이다. 복사/붙여넣기나 수동 배포 없이:
 - `gas/**` 변경분을 main에 push → `.github/workflows/gas-deploy.yml`이
@@ -76,6 +103,10 @@
    - `GITHUB_REF` (선택) = 워크플로 파일이 있는 브랜치명. main에 아직 병합 전이면
      `claude/google-apps-script-github-4ksesx`처럼 현재 브랜치명을 넣어야 하고,
      병합 후에는 지우거나 `main`으로 바꾼다 (비워두면 기본값 `main` 사용).
+   - `CLASS_NAME` = 이 스프레드시트가 어느 반인지 (`class-01` 또는 `class-02`). 워크플로가
+     이 값으로 어느 GitHub Environment의 `GAS_WEBAPP_URL`/`GAS_API_TOKEN`을 쓸지 정하므로,
+     반마다 다른 스프레드시트에 바인딩된 GAS 프로젝트에는 반드시 서로 다른 값을 넣어야 한다
+     (자세한 내용은 위 "여러 반 동시 자동화" 참고).
 3. `cd gas && clasp push --force`로 최신 `Code.js`(메뉴 포함)를 반영한 뒤 스프레드시트를
    새로고침하면 "출결 갱신" 메뉴가 보인다.
 4. 메뉴에서 "Hoseo 출결 갱신 요청" / "IBK 출결 갱신 요청"을 클릭하면 해당 GitHub Actions

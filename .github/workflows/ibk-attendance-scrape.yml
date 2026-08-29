@@ -5,6 +5,13 @@ name: IBK Campus Attendance Scrape
 on:
   workflow_dispatch:
     inputs:
+      class_name:
+        description: '어느 반의 스프레드시트/시크릿을 쓸지 (GitHub Environment 이름)'
+        required: true
+        type: choice
+        options:
+          - class-01
+          - class-02
       semester:
         description: '년도/학기 (예: 2026년도 1학기). 비워두면 화면 기본값 사용'
         required: false
@@ -20,6 +27,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.class_name }}
     steps:
       - uses: actions/checkout@v4
 
