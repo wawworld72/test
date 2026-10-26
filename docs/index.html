@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="JSON 시험">
-<title>JSON 읽기·쓰기 시험</title>
+<meta name="apple-mobile-web-app-title" content="문서 시험">
+<title>GitHub 문서 읽기·쓰기 시험</title>
 <style>
   :root { --bg:#fff; --fg:#1b1f24; --mut:#667; --line:#d0d7de; --ok:#1a7f37; --err:#cf222e; --box:#f6f8fa; }
   @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --mut:#9aa4af; --line:#30363d; --ok:#3fb950; --err:#f85149; --box:#161b22; } }
@@ -22,13 +22,14 @@
   table { border-collapse:collapse; width:100%; } td, th { padding:6px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
   small { color:var(--mut); }
   textarea { width:100%; box-sizing:border-box; min-height:220px; padding:10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace, monospace; }
+  h2 { font-size:16px; margin:18px 0 6px; } .lv { color:var(--mut); font-size:12px; }
   #editbox { display:none; margin-top:16px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>JSON 읽기·쓰기 시험</h1>
-  <small>GitHub API로 저장소의 JSON 파일을 읽고, 수정해 저장(커밋)합니다. 토큰은 이 브라우저에서만 쓰이며 파일에 포함되지 않습니다.</small>
+  <h1>GitHub 문서 읽기·쓰기 시험</h1>
+  <small>GitHub API로 저장소 파일을 읽습니다. JSON(.json)은 수정해 저장(커밋)할 수 있고, 마크다운(.md)은 머리말·제목·체크리스트·표를 뽑아 읽기 전용으로 보여 줍니다. 토큰은 이 브라우저에서만 쓰이며 파일에 포함되지 않습니다.</small>
 
   <label for="token">토큰 (읽기: Contents 읽기 / 저장: Contents 읽기·쓰기)</label>
   <input id="token" type="password" autocomplete="off">
@@ -39,7 +40,7 @@
     <div><label for="branch">브랜치</label><input id="branch" type="text" value="main" autocapitalize="off" autocorrect="off"></div>
   </div>
   <label for="path">파일 경로</label>
-  <input id="path" type="text" placeholder="예: data/sample.json" autocapitalize="off" autocorrect="off">
+  <input id="path" type="text" placeholder="예: data/sample.json 또는 data/sample.md" autocapitalize="off" autocorrect="off">
 
   <button id="read">읽기</button>
   <div id="status"></div>
@@ -87,6 +88,104 @@ function authHeaders(token) {
   return h;
 }
 
+// ---- 마크다운 파싱 (읽기 전용) ----
+function stripQuotes(v) {
+  v = v.trim();
+  return (v.length > 1 && /^(".*"|'.*')$/.test(v)) ? v.slice(1, -1) : v;
+}
+
+function parseFrontMatter(lines) {
+  const fm = {};
+  if (lines[0] === undefined || lines[0].trim() !== "---") return { fm, end: 0 };
+  let end = -1;
+  for (let i = 1; i < lines.length; i++) if (lines[i].trim() === "---") { end = i; break; }
+  if (end < 0) return { fm, end: 0 };
+  let key = null;
+  for (let i = 1; i < end; i++) {
+    const line = lines[i];
+    const item = line.match(/^\s+-\s+(.*)$/);
+    if (item && key) { if (!Array.isArray(fm[key])) fm[key] = []; fm[key].push(stripQuotes(item[1])); continue; }
+    const kv = line.match(/^([^\s:#][^:]*):\s*(.*)$/);
+    if (!kv) continue;
+    key = kv[1].trim();
+    const v = kv[2].trim();
+    if (v === "") fm[key] = [];
+    else if (/^\[.*\]$/.test(v)) fm[key] = v.slice(1, -1).split(",").map(x => stripQuotes(x)).filter(x => x !== "");
+    else fm[key] = stripQuotes(v);
+  }
+  return { fm, end: end + 1 };
+}
+
+function splitRow(line) {
+  let t = line.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|") && !t.endsWith("\\|")) t = t.slice(0, -1);
+  return t.split(/(?<!\\)\|/).map(c => c.replace(/\\\|/g, "|").trim());
+}
+
+const SEP = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+function parseMarkdown(text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const { fm, end } = parseFrontMatter(lines);
+  const out = { frontMatter: fm, headings: [], checklist: [], tables: [] };
+  let fence = null, section = "";
+  for (let i = end; i < lines.length; i++) {
+    const line = lines[i];
+    const f = line.match(/^\s*(```+|~~~+)/);
+    if (f) {
+      if (!fence) fence = f[1][0]; else if (f[1][0] === fence) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const h = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if (h) { section = h[2]; out.headings.push({ level: h[1].length, text: h[2], line: i + 1 }); continue; }
+    const c = line.match(/^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/);
+    if (c) { out.checklist.push({ checked: c[1] !== " ", text: c[2].trim(), section, line: i + 1 }); continue; }
+    if (line.includes("|") && i + 1 < lines.length && SEP.test(lines[i + 1]) && lines[i + 1].includes("-")) {
+      const header = splitRow(line), rows = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j].includes("|") && lines[j].trim() !== "") { rows.push(splitRow(lines[j])); j++; }
+      out.tables.push({ section, header, rows, line: i + 1 });
+      i = j - 1;
+    }
+  }
+  return out;
+}
+
+function addTable(parent, header, rows) {
+  const t = document.createElement("table");
+  const hr = t.insertRow();
+  for (const h of header) { const th = document.createElement("th"); th.textContent = h; hr.append(th); }
+  for (const row of rows) { const tr = t.insertRow(); for (const c of row) tr.insertCell().textContent = c; }
+  parent.append(t);
+}
+
+function section(view, title) {
+  const h = document.createElement("h2"); h.textContent = title; view.append(h);
+}
+
+function showMarkdown(md) {
+  const view = $("view"); view.replaceChildren();
+  const fmKeys = Object.keys(md.frontMatter);
+  section(view, "머리말 (" + fmKeys.length + ")");
+  if (fmKeys.length) addTable(view, ["키", "값"], fmKeys.map(k => [k, Array.isArray(md.frontMatter[k]) ? md.frontMatter[k].join(", ") : md.frontMatter[k]]));
+  else view.append("없음");
+  section(view, "제목 (" + md.headings.length + ")");
+  if (md.headings.length) addTable(view, ["수준", "제목", "줄"], md.headings.map(h => ["H" + h.level, h.text, String(h.line)]));
+  else view.append("없음");
+  const done = md.checklist.filter(c => c.checked).length;
+  section(view, "체크리스트 (" + done + "/" + md.checklist.length + " 완료)");
+  if (md.checklist.length) addTable(view, ["상태", "항목", "소속 제목", "줄"], md.checklist.map(c => [c.checked ? "완료" : "미완료", c.text, c.section, String(c.line)]));
+  else view.append("없음");
+  section(view, "표 (" + md.tables.length + ")");
+  if (!md.tables.length) view.append("없음");
+  for (const t of md.tables) {
+    const cap = document.createElement("div"); cap.className = "lv"; cap.textContent = (t.section || "(제목 없음)") + " · " + t.line + "줄"; view.append(cap);
+    addTable(view, t.header, t.rows);
+  }
+}
+
 function show(data) {
   const view = $("view"); view.replaceChildren();
   if (data && typeof data === "object" && !Array.isArray(data)) {
@@ -124,11 +223,16 @@ async function readFile() {
     if (Array.isArray(info) || info.type !== "file") { setStatus("파일이 아닙니다(폴더 등).", "err"); return; }
     if (info.encoding !== "base64" || typeof info.content !== "string") { setStatus("내용을 받지 못했습니다(1MB 초과 파일일 수 있음).", "err"); return; }
     let data, text;
-    try { text = decodeBase64Utf8(info.content); data = JSON.parse(text); }
-    catch (e) { setStatus("JSON 형식이 올바르지 않습니다: " + e.message, "err"); return; }
-    setStatus("읽기 성공", "ok");
+    const isMd = /\.(md|markdown)$/i.test(path);
+    try { text = decodeBase64Utf8(info.content); } catch (e) { setStatus("내용을 해석하지 못했습니다: " + e.message, "err"); return; }
+    if (!isMd) {
+      try { data = JSON.parse(text); }
+      catch (e) { setStatus("JSON 형식이 올바르지 않습니다: " + e.message, "err"); return; }
+    }
+    setStatus(isMd ? "읽기 성공 (마크다운, 읽기 전용)" : "읽기 성공", "ok");
     $("meta").textContent = "읽은 시각 " + new Date().toLocaleTimeString("ko-KR") + " · sha " + info.sha.slice(0, 7) +
                             " · " + info.size + "바이트" + (remain ? " · 남은 호출 " + remain : "");
+    if (isMd) { showMarkdown(parseMarkdown(text)); return; }
     show(data);
     loaded = { repo, branch: branch || "main", path, sha: info.sha };
     $("editor").value = text;
