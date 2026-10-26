@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="JSON 시험">
+<title>JSON 읽기·쓰기 시험</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1f24; --mut:#667; --line:#d0d7de; --ok:#1a7f37; --err:#cf222e; --box:#f6f8fa; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --mut:#9aa4af; --line:#30363d; --ok:#3fb950; --err:#f85149; --box:#161b22; } }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:720px; margin:0 auto; }
+  h1 { font-size:20px; }
+  label { display:block; margin:10px 0 2px; font-size:13px; color:var(--mut); }
+  input[type=text], input[type=password] { width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+  .row { display:flex; gap:8px; } .row > div { flex:1; }
+  button { margin-top:12px; padding:8px 16px; border:1px solid var(--line); border-radius:6px; background:var(--box); color:var(--fg); cursor:pointer; }
+  #status { margin-top:12px; font-weight:600; } .ok { color:var(--ok); } .err { color:var(--err); }
+  pre, table { background:var(--box); border:1px solid var(--line); border-radius:6px; }
+  pre { padding:10px; overflow:auto; }
+  table { border-collapse:collapse; width:100%; } td, th { padding:6px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  small { color:var(--mut); }
+  textarea { width:100%; box-sizing:border-box; min-height:220px; padding:10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace, monospace; }
+  #editbox { display:none; margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>JSON 읽기·쓰기 시험</h1>
+  <small>GitHub API로 저장소의 JSON 파일을 읽고, 수정해 저장(커밋)합니다. 토큰은 이 브라우저에서만 쓰이며 파일에 포함되지 않습니다.</small>
+
+  <label for="token">토큰 (읽기: Contents 읽기 / 저장: Contents 읽기·쓰기)</label>
+  <input id="token" type="password" autocomplete="off">
+  <label><input id="remember" type="checkbox"> 이 브라우저에 토큰 저장 (공용 PC에서는 사용하지 않음)</label>
+
+  <div class="row">
+    <div><label for="repo">저장소 (소유자/이름)</label><input id="repo" type="text" placeholder="소유자/저장소" autocapitalize="off" autocorrect="off"></div>
+    <div><label for="branch">브랜치</label><input id="branch" type="text" value="main" autocapitalize="off" autocorrect="off"></div>
+  </div>
+  <label for="path">파일 경로</label>
+  <input id="path" type="text" placeholder="예: data/sample.json" autocapitalize="off" autocorrect="off">
+
+  <button id="read">읽기</button>
+  <div id="status"></div>
+  <div id="meta"></div>
+  <div id="view"></div>
+
+  <div id="editbox">
+    <label for="editor">JSON 편집 (저장하면 위 브랜치에 커밋됩니다)</label>
+    <textarea id="editor" spellcheck="false"></textarea>
+    <label for="msg">커밋 메시지 (비우면 자동)</label>
+    <input id="msg" type="text">
+    <button id="save">저장</button>
+    <div id="saveStatus"></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const KEY = "jsontest.token";
+
+try { for (const id of ["repo","branch","path"]) { const v = localStorage.getItem("jsontest." + id); if (v) $(id).value = v; } } catch (e) {}
+try { const t = localStorage.getItem(KEY); if (t) { $("token").value = t; $("remember").checked = true; } } catch (e) {}
+
+let loaded = null; // 마지막으로 읽은 파일 정보(저장 시 충돌 확인에 사용)
+
+function setStatus(msg, cls) { const s = $("status"); s.textContent = msg; s.className = cls || ""; }
+
+function decodeBase64Utf8(b64) {
+  const bin = atob(b64.replace(/\n/g, ""));
+  return new TextDecoder("utf-8").decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+}
+
+function encodeBase64Utf8(text) {
+  let bin = ""; for (const b of new TextEncoder().encode(text)) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+function apiUrl(repo, path, branch) {
+  return "https://api.github.com/repos/" + repo + "/contents/" + path.split("/").map(encodeURIComponent).join("/") +
+         (branch ? "?ref=" + encodeURIComponent(branch) : "");
+}
+
+function authHeaders(token) {
+  const h = { "Accept": "application/vnd.github+json" };
+  if (token) h["Authorization"] = "Bearer " + token;
+  return h;
+}
+
+function show(data) {
+  const view = $("view"); view.replaceChildren();
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const table = document.createElement("table");
+    for (const [k, v] of Object.entries(data)) {
+      const tr = table.insertRow();
+      tr.insertCell().textContent = k;
+      tr.insertCell().textContent = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+    view.append(table);
+  }
+}
+
+async function readFile() {
+  const token = $("token").value.trim();
+  const repo = $("repo").value.trim(), branch = $("branch").value.trim(), path = $("path").value.trim();
+  try {
+    if ($("remember").checked && token) localStorage.setItem(KEY, token); else localStorage.removeItem(KEY);
+  } catch (e) {}
+  loaded = null; $("editbox").style.display = "none"; $("saveStatus").textContent = "";
+  try { localStorage.setItem("jsontest.repo", repo); localStorage.setItem("jsontest.branch", branch); localStorage.setItem("jsontest.path", path); } catch (e) {}
+  $("meta").textContent = ""; $("view").replaceChildren();
+  if (!/^[^/\s]+\/[^/\s]+$/.test(repo) || !path) { setStatus("저장소와 파일 경로를 확인하세요.", "err"); return; }
+  setStatus("읽는 중…");
+  const url = apiUrl(repo, path, branch || "main");
+  const headers = authHeaders(token);
+  try {
+    const res = await fetch(url, { headers, cache: "no-store" });
+    const remain = res.headers.get("x-ratelimit-remaining");
+    if (!res.ok) {
+      const hint = { 401: "토큰이 잘못되었거나 만료되었습니다.", 403: "권한이 없거나 호출 한도를 넘었습니다.", 404: "파일이 없거나 토큰에 이 저장소 접근 권한이 없습니다." }[res.status] || "";
+      setStatus("실패 (" + res.status + ") " + hint, "err"); return;
+    }
+    const info = await res.json();
+    if (Array.isArray(info) || info.type !== "file") { setStatus("파일이 아닙니다(폴더 등).", "err"); return; }
+    if (info.encoding !== "base64" || typeof info.content !== "string") { setStatus("내용을 받지 못했습니다(1MB 초과 파일일 수 있음).", "err"); return; }
+    let data, text;
+    try { text = decodeBase64Utf8(info.content); data = JSON.parse(text); }
+    catch (e) { setStatus("JSON 형식이 올바르지 않습니다: " + e.message, "err"); return; }
+    setStatus("읽기 성공", "ok");
+    $("meta").textContent = "읽은 시각 " + new Date().toLocaleTimeString("ko-KR") + " · sha " + info.sha.slice(0, 7) +
+                            " · " + info.size + "바이트" + (remain ? " · 남은 호출 " + remain : "");
+    show(data);
+    loaded = { repo, branch: branch || "main", path, sha: info.sha };
+    $("editor").value = text;
+    $("editbox").style.display = "block";
+  } catch (e) {
+    setStatus("요청 실패: " + e.message, "err");
+  }
+}
+
+async function saveFile() {
+  const ss = $("saveStatus");
+  const say = (m, c) => { ss.textContent = m; ss.className = c || ""; };
+  if (!loaded) { say("먼저 파일을 읽으세요.", "err"); return; }
+  const token = $("token").value.trim();
+  if (!token) { say("저장에는 토큰이 필요합니다.", "err"); return; }
+  let text = $("editor").value;
+  try { JSON.parse(text); } catch (e) { say("JSON 형식 오류로 저장하지 않았습니다: " + e.message, "err"); return; }
+  if (!text.endsWith("\n")) text += "\n";
+  const msg = $("msg").value.trim() || ("update " + loaded.path + " (JSON 쓰기 시험)");
+  say("저장 중…");
+  $("save").disabled = true;
+  try {
+    const res = await fetch(apiUrl(loaded.repo, loaded.path), {
+      method: "PUT",
+      headers: Object.assign({ "Content-Type": "application/json" }, authHeaders(token)),
+      body: JSON.stringify({ message: msg, content: encodeBase64Utf8(text), sha: loaded.sha, branch: loaded.branch })
+    });
+    if (res.ok) {
+      const out = await res.json();
+      loaded.sha = out.content.sha;
+      $("editor").value = text;
+      say("저장 성공 · 커밋 " + out.commit.sha.slice(0, 7) + " · 파일 sha " + out.content.sha.slice(0, 7) + " · " + new Date().toLocaleTimeString("ko-KR"), "ok");
+      try { show(JSON.parse(text)); } catch (e) {}
+      return;
+    }
+    const hint = {
+      409: "그 사이 파일이 바뀌었습니다. 저장하지 않았습니다. 다시 읽은 뒤 수정하세요.",
+      422: "그 사이 파일이 바뀌었거나 요청이 올바르지 않습니다. 다시 읽은 뒤 시도하세요.",
+      401: "토큰이 잘못되었거나 만료되었습니다.",
+      403: "쓰기 권한이 없습니다(토큰의 Contents 쓰기 권한과 브랜치 보호 확인).",
+      404: "파일이 없거나 토큰에 이 저장소 쓰기 권한이 없습니다."
+    }[res.status] || "";
+    say("저장 실패 (" + res.status + ") " + hint, "err");
+  } catch (e) {
+    say("요청 실패: " + e.message, "err");
+  } finally {
+    $("save").disabled = false;
+  }
+}
+$("read").addEventListener("click", readFile);
+$("save").addEventListener("click", saveFile);
+</script>
+</body>
+</html>
